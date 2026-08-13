@@ -50,7 +50,8 @@ export const YieldPredictionModule: React.FC<YieldPredictionModuleProps> = ({
   const farmTitle = farm?.farm_name || 'AgriSense Registered Plot';
 
   // Dynamic Location Label - Replaces "Unknown Location, Unknown"
-  const locationLabel = farm?.location_name || (location?.city ? `${location.city}${location.state ? `, ${location.state}` : ''}` : 'Ghaziabad, Uttar Pradesh');
+  const rawCity = location?.city && location.city !== 'Unknown Location' ? location.city : null;
+  const locationLabel = farm?.location_name || (rawCity ? `${rawCity}${location?.state ? `, ${location.state}` : ''}` : 'Ghaziabad, Uttar Pradesh');
 
   const [prediction, setPrediction] = useState<YieldPredictionResult | null>(null);
   const [pipelineValidation, setPipelineValidation] = useState<PipelineFeatureValidation | null>(null);

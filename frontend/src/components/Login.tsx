@@ -36,7 +36,12 @@ export default function Login({ onLogin, onGuestLogin, onSwitchToSignup }: Login
     }
   }
 
-  const handleGuestLogin = () => {
+  const handleGuestLogin = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    console.log("Guest login triggered in Login.tsx");
     if (onGuestLogin) {
       onGuestLogin();
     } else {
@@ -180,10 +185,11 @@ export default function Login({ onLogin, onGuestLogin, onSwitchToSignup }: Login
 
           {/* Guest Login */}
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleGuestLogin}
-            className="w-full bg-blue-600/90 backdrop-blur-sm hover:bg-blue-700/90 text-white py-3 rounded-xl font-medium shadow-lg transition-all flex items-center justify-center gap-2 border border-blue-500/50"
+            className="w-full bg-blue-600/90 backdrop-blur-sm hover:bg-blue-700/90 text-white py-3 rounded-xl font-medium shadow-lg transition-all flex items-center justify-center gap-2 border border-blue-500/50 cursor-pointer"
           >
             Continue as Guest
             <ArrowRight className="w-4 h-4" />

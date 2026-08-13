@@ -49,7 +49,11 @@ export function Signup({ onSwitchToLogin, onGuestLogin }: SignupProps) {
     }
   }
 
-  const handleGuestLogin = () => {
+  const handleGuestLogin = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (onGuestLogin) {
       onGuestLogin();
     } else {
@@ -212,10 +216,11 @@ export function Signup({ onSwitchToLogin, onGuestLogin }: SignupProps) {
 
           {/* Guest Login */}
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleGuestLogin}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-medium shadow-lg transition-all flex items-center justify-center gap-2"
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-medium shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             Continue as Guest
             <ArrowRight className="w-4 h-4" />

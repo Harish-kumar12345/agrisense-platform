@@ -1,7 +1,13 @@
 const alertEngine = require('./src/services/alertEngine');
+const { connectToDatabase } = require('./src/utils/db');
 
 async function testAlertEngine() {
   console.log('--- Testing Smart Alert Engine ---');
+  try {
+    await connectToDatabase();
+  } catch (e) {
+    console.log('MongoDB offline, running with fast in-memory fallback store.');
+  }
 
   const telemetry = {
     farm: { id: 'farm_ghaziabad_01', name: 'Ghaziabad Rice Field', crop: 'Rice' },

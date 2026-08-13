@@ -7,6 +7,7 @@ import { FarmGISPage } from './components/FarmGIS/FarmGISPage';
 import { WeatherDashboard } from './components/Weather/WeatherDashboard';
 import { SoilAnalysisModule } from './components/Soil/SoilAnalysisModule';
 import { YieldPredictionModule } from './components/Yield/YieldPredictionModule';
+import { DiseaseRiskModule } from './components/Disease/DiseaseRiskModule';
 import { FarmData } from './services/farmService';
 import { OfficerLogin } from './components/OfficerLogin';
 import { OfficerDashboard } from './components/OfficerDashboard';
@@ -14,7 +15,7 @@ import { AuthWrapper } from './components/AuthWrapper';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { LanguageToggle } from './components/LanguageToggle';
-import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain } from 'lucide-react';
+import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain, Bug } from 'lucide-react';
 
 type LocationData = {
   latitude: number;
@@ -70,8 +71,8 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative">
-      <div className="hero-bg" />
+    <div className="min-h-screen bg-neutral-light flex flex-col">
+      {/* Dynamic Main App Navbar */}
       <header className="navbar border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -83,6 +84,7 @@ function AppContent() {
               <button className={`btn !py-2 !px-3 ${(view==='home' || view==='dashboard')?'opacity-100':'opacity-85'}`} onClick={() => setView('home')}><Sprout className="w-4 h-4"/> {t('nav.home')}</button>
               <button className={`btn !py-2 !px-3 ${view==='gis'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('gis')}><MapPin className="w-4 h-4"/> Farm GIS</button>
               <button className={`btn !py-2 !px-3 ${view==='yield'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('yield')}><Brain className="w-4 h-4"/> AI Yield</button>
+              <button className={`btn !py-2 !px-3 ${view==='disease'?'opacity-100':'opacity-85'} bg-rose-50 text-rose-700 border border-rose-200`} onClick={() => setView('disease')}><Bug className="w-4 h-4"/> Disease Risk</button>
               <button className={`btn !py-2 !px-3 ${view==='soil'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('soil')}><FlaskConical className="w-4 h-4"/> Soil Analysis</button>
               <button className={`btn !py-2 !px-3 ${view==='weather'?'opacity-100':'opacity-85'} bg-teal-50 text-teal-700 border border-teal-200`} onClick={() => setView('weather')}><CloudSun className="w-4 h-4"/> Weather</button>
               <button className={`btn !py-2 !px-3 ${view==='chat'?'opacity-100':'opacity-85'}`} onClick={() => setView('chat')}><MessageSquare className="w-4 h-4"/> {t('nav.chat')}</button>
@@ -118,6 +120,13 @@ function AppContent() {
         )}
         {view === 'yield' && (
           <YieldPredictionModule
+            farm={activeFarm}
+            location={dashboardData?.location}
+            crop={dashboardData?.crop}
+          />
+        )}
+        {view === 'disease' && (
+          <DiseaseRiskModule
             farm={activeFarm}
             location={dashboardData?.location}
             crop={dashboardData?.crop}

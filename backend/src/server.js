@@ -51,6 +51,7 @@ app.get('/api/health', (req, res) => {
 
 const farmRoutes = require('./routes/farm');
 const yieldPredictionRoutes = require('./routes/yieldPrediction');
+const diseaseRiskRoutes = require('./routes/diseaseRisk');
 
 // Routes
 app.use('/api/query', queryRoutes);
@@ -60,6 +61,7 @@ app.use('/api/krishi-seva-kendra', krishiSevaKendraRoutes);
 app.use('/api/crop-prices', cropPricesRoutes);
 app.use('/api/farms', farmRoutes);
 app.use('/api/ml', yieldPredictionRoutes);
+app.use('/api/ml', diseaseRiskRoutes);
 
 // Socket.io
 initChatSockets(io);

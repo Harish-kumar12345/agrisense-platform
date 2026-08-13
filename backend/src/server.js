@@ -49,6 +49,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+const farmRoutes = require('./routes/farm');
+const yieldPredictionRoutes = require('./routes/yieldPrediction');
+
 // Routes
 app.use('/api/query', queryRoutes);
 app.use('/api', infoRoutes);
@@ -56,6 +59,7 @@ app.use('/api/officer', officerRoutes);
 app.use('/api/krishi-seva-kendra', krishiSevaKendraRoutes);
 app.use('/api/crop-prices', cropPricesRoutes);
 app.use('/api/farms', farmRoutes);
+app.use('/api/ml', yieldPredictionRoutes);
 
 // Socket.io
 initChatSockets(io);

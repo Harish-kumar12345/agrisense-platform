@@ -18,8 +18,9 @@ import { OfficerDashboard } from './components/OfficerDashboard';
 import { AuthWrapper } from './components/AuthWrapper';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
-import { LanguageToggle } from './components/LanguageToggle';
-import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain, Bug, Pill, Tractor, IndianRupee, BarChart3 } from 'lucide-react';
+import { SmartAlertsCenter } from './components/Alerts/SmartAlertsCenter';
+import { alertService } from './services/alertService';
+import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain, Bug, Pill, Tractor, IndianRupee, BarChart3, Bell } from 'lucide-react';
 
 type LocationData = {
   latitude: number;
@@ -40,7 +41,28 @@ function AppContent() {
     farmDetails?: FarmData;
   } | null>(null);
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
+  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
+
+  React.useEffect(() => {
+    const loadAlerts = async () => {
+      try {
+        const telemetry = {
+          farm: { id: activeFarm?.id || 'farm_01', name: activeFarm?.name || 'Ghaziabad Rice Field', crop: dashboardData?.crop || activeFarm?.crop || 'Rice' },
+          weather: { temperature_c: 34, humidity: 76, wind_speed_kmh: 18, rain_mm: 12 },
+          soil: { moisture: 24, ph: 5.4 },
+          disease: { riskScore: 82, name: 'Rice Blast & Sheath Rot' },
+          gdd: { progressPercentage: 82, currentStage: 'Grain Filling Stage' },
+          yieldData: { predictedYield: 4.5, historicalAvgYield: 5.5 }
+        };
+        const alerts = await alertService.evaluateTelemetry(telemetry);
+        setUnreadAlertCount(alerts.filter(a => a.status === 'unread').length);
+      } catch (e) {}
+    };
+    loadAlerts();
+    const interval = setInterval(loadAlerts, 30000);
+    return () => clearInterval(interval);
+  }, [activeFarm, dashboardData]);
 
   const handleLogout = async () => {
     try {
@@ -85,6 +107,15 @@ function AppContent() {
           </div>
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-2">
+              <button className={`btn !py-2 !px-3 relative bg-red-50 text-red-700 border border-red-200 font-bold`} onClick={() => setIsAlertsOpen(true)}>
+                <Bell className="w-4 h-4 text-red-600" />
+                Alerts
+                {unreadAlertCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-600 text-white animate-bounce shadow">
+                    {unreadAlertCount}
+                  </span>
+                )}
+              </button>
               <button className={`btn !py-2 !px-3 ${(view==='home' || view==='dashboard')?'opacity-100':'opacity-85'}`} onClick={() => setView('home')}><Sprout className="w-4 h-4"/> {t('nav.home')}</button>
               <button className={`btn !py-2 !px-3 ${view==='gis'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('gis')}><MapPin className="w-4 h-4"/> Farm GIS</button>
               <button className={`btn !py-2 !px-3 ${view==='analytics'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold`} onClick={() => setView('analytics')}><BarChart3 className="w-4 h-4"/> Analytics</button>
@@ -211,6 +242,13 @@ function AppContent() {
           </div>
         )}
       </main>
+      <SmartAlertsCenter
+        isOpen={isAlertsOpen}
+        onClose={() => setIsAlertsOpen(false)}
+        onNavigateModule={(modKey) => setView(modKey)}
+        activeFarmId={activeFarm?.id || 'farm_01'}
+        isOfficer={user?.role === 'officer' || user?.role === 'admin'}
+      />
       <footer className="border-t border-gray-100 bg-white/70">
         <div className="max-w-6xl mx-auto px-4 py-5 text-sm text-gray-600 flex items-center justify-between">
           <span>© {new Date().getFullYear()} AgriSense Assistant</span>

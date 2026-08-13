@@ -54,6 +54,7 @@ const diseaseRiskRoutes = require('./routes/diseaseRisk');
 const inventoryRoutes = require('./routes/inventory');
 const farmActivityRoutes = require('./routes/farmActivity');
 const harvestManagementRoutes = require('./routes/harvestManagement');
+const alertRoutes = require('./routes/alerts');
 
 // Routes
 app.use('/api/query', queryRoutes);
@@ -67,6 +68,7 @@ app.use('/api/ml', diseaseRiskRoutes);
 app.use('/api', inventoryRoutes);
 app.use('/api/farm-activities', farmActivityRoutes);
 app.use('/api/harvest-management', harvestManagementRoutes);
+app.use('/api/alerts', alertRoutes);
 
 // Socket.io
 initChatSockets(io);

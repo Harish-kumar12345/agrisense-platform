@@ -1,4 +1,4 @@
-﻿const dotenv = require('dotenv');
+const dotenv = require('dotenv');
 const { InferenceClient } = require('@huggingface/inference');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
@@ -86,8 +86,9 @@ class PlantDiseaseService {
 
   async analyzeWithHuggingFace(imageBuffer) {
     try {
+      const blob = new Blob([imageBuffer], { type: 'image/jpeg' });
       const result = await this.hfClient.imageClassification({
-        data: imageBuffer,
+        data: blob,
         model: this.modelName,
       });
 
@@ -119,7 +120,7 @@ class PlantDiseaseService {
 
   async analyzeWithGemini(imageBuffer) {
     try {
-      const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = this.geminiClient.getGenerativeModel({ model: "gemini-2.0-flash" });
       
       const prompt = `Analyze this plant image and identify any diseases or health issues. 
       

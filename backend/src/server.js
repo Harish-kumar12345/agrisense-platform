@@ -68,30 +68,17 @@ async function startServer() {
     // Connect to MongoDB Atlas
     await connectToDatabase();
     console.log('✅ Connected to MongoDB Atlas');
-    
-    // Start the server
-    server.listen(PORT, HOST, () => {
-      console.log(`🚀 Backend listening on ${HOST}:${PORT}`);
-      console.log(`🌐 Health check: http://${HOST}:${PORT}/api/health`);
-      console.log(`🤖 AI test: http://${HOST}:${PORT}/api/query/test-ai`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📊 Database: MongoDB Atlas`);
-    });
-    
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    console.error('❌ MongoDB Atlas connection failed');
-    
-    // In production, still start server but log the error
-    if (process.env.NODE_ENV === 'production') {
-      console.log('⚠️ Starting server without database in production mode');
-      server.listen(PORT, HOST, () => {
-        console.log(`🚀 Backend listening on ${HOST}:${PORT} (DB connection failed)`);
-      });
-    } else {
-      process.exit(1);
-    }
+    console.warn('⚠️ Starting server without database connection (fallback mode active)');
   }
+  
+  // Start the server
+  server.listen(PORT, HOST, () => {
+    console.log(`🚀 Backend listening on ${HOST}:${PORT}`);
+    console.log(`🌐 Health check: http://${HOST}:${PORT}/api/health`);
+    console.log(`🤖 AI test: http://${HOST}:${PORT}/api/query/test-ai`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
 }
 
 // Graceful shutdown

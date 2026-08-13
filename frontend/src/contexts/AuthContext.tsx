@@ -25,9 +25,7 @@ export function AuthProvider({ children }: { children: any }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Only initialize Supabase if properly configured
-    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL
-    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+    if (!supabase) {
       setLoading(false)
       return
     }
@@ -71,8 +69,7 @@ export function AuthProvider({ children }: { children: any }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL
-    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+    if (!supabase) {
       throw new Error('Supabase not configured. Please set up your Supabase credentials.')
     }
     
@@ -88,8 +85,7 @@ export function AuthProvider({ children }: { children: any }) {
   }
 
   const signup = async (email: string, password: string, name: string) => {
-    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL
-    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+    if (!supabase) {
       throw new Error('Supabase not configured. Please set up your Supabase credentials.')
     }
     
@@ -110,8 +106,7 @@ export function AuthProvider({ children }: { children: any }) {
   }
 
   const logout = async () => {
-    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL
-    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+    if (!supabase) {
       setUser(null)
       return
     }

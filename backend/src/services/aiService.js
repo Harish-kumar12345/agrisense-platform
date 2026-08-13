@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { Query } = require('../models/Query');
 const { KnowledgeBase } = require('../models/KnowledgeBase');
 const { getIo } = require('../utils/io');
@@ -40,7 +41,7 @@ console.log('🔑 Checking Gemini API Key...');
 if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your_gemini_api_key_here') {
   try {
     genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     console.log('✅ Gemini AI initialized successfully');
   } catch (error) {
     console.error('❌ Failed to initialize Gemini AI:', error.message);
@@ -72,9 +73,14 @@ async function callWithRetry(fn, maxRetries = 3, baseDelay = 1000) {
 }
 
 async function retrieveContext(userText) {
-  const terms = userText.split(/\s+/).filter(Boolean).slice(0, 5);
-  const found = await KnowledgeBase.find({ tags: { $in: terms } }).limit(3).lean();
-  return found.map((d) => `${d.title}: ${d.content}`).join('\n\n');
+  try {
+    if (mongoose.connection.readyState !== 1) return '';
+    const terms = userText.split(/\s+/).filter(Boolean).slice(0, 5);
+    const found = await KnowledgeBase.find({ tags: { $in: terms } }).limit(3).lean();
+    return found.map((d) => `${d.title}: ${d.content}`).join('\n\n');
+  } catch (err) {
+    return '';
+  }
 }
 
 async function generateAIResponse({ queryId, text, roomId }) {
@@ -164,7 +170,7 @@ async function getFallbackResponse(text, language = 'en') {
   }
   // Default response
   else {
-    response = "🌾 Thank you for your agricultural question! While I'm currently experiencing high demand, here are some general tips: Follow good agricultural practices, consult your local Krishi Vigyan Kendra (KVK), and use modern farming techniques for better yields. Feel free to ask again!";
+    response = "🌾 Thank you for your agricultural question! Follow good agricultural practices, consult your local Krishi Vigyan Kendra (KVK), and use modern farming techniques for better yields. Feel free to ask again!";
   }
   
   // Translate to Malayalam if requested
@@ -173,7 +179,6 @@ async function getFallbackResponse(text, language = 'en') {
       response = await translateToMalayalam(response);
     } catch (error) {
       console.error('❌ Fallback translation failed:', error);
-      // Return a basic Malayalam message if translation fails
       response = "ക്ഷമിക്കണം, ഇപ്പോൾ വിശദമായ മറുപടി നൽകാൻ കഴിഞ്ഞില്ല. കൃഷി സംബന്ധിയായ സഹായത്തിന് പ്രാദേശിക കൃഷി ഓഫീസറെ സമീപിക്കുക.";
     }
   }
@@ -204,7 +209,7 @@ async function testAI(query = "What crops are good for monsoon season?") {
 // Simple AI response for real-time chat (no database)
 async function generateChatResponse(text, options = {}) {
   try {
-    const { language = 'en' } = options;
+    const language = typeof options === 'string' ? options : (options?.language || 'en');
     console.log(`🤖 Generating chat response for: ${text.substring(0, 50)}... (Language: ${language})`);
     
     const context = await retrieveContext(text);
@@ -240,21 +245,22 @@ Provide helpful agricultural guidance`;
         console.log('✅ Chat response generated successfully');
       } catch (genErr) {
         console.error('❌ AI Generation Error after retries:', genErr);
-        answer = getFallbackResponse(text, language);
+        answer = await getFallbackResponse(text, language);
       }
     } else {
       console.log('⚠️ Gemini API not configured - using fallback');
-      answer = getFallbackResponse(text, language);
+      answer = await getFallbackResponse(text, language);
     }
 
     if (!answer) {
-      answer = getFallbackResponse(text, language);
+      answer = await getFallbackResponse(text, language);
     }
     
     return answer;
   } catch (err) {
     console.error('❌ Error in generateChatResponse:', err);
-    return getFallbackResponse(text, language);
+    const language = typeof options === 'string' ? options : (options?.language || 'en');
+    return await getFallbackResponse(text, language);
   }
 }
 
@@ -397,6 +403,6 @@ async function getFallbackDiseaseRecommendation(diseaseName, language = 'en') {
   return recommendation;
 }
 
-module.exports = { generateAIResponse, generateChatResponse, testAI, generateDiseaseRecommendation };
+module.exports = { generateAIResponse, generateChatResponse, testAI, generateDiseaseRecommendation, translateToMalayalam };
 
 

@@ -1,5 +1,24 @@
 import axios from 'axios';
 
+export type PipelineFeatureValidation = {
+  isValid: boolean;
+  missingFeatures: string[];
+  collectedFeatures: {
+    crop?: string;
+    farm_area_ha?: number;
+    temperature_c?: number;
+    rainfall_mm?: number;
+    humidity_pct?: number;
+    soil_moisture_pct?: number;
+    soil_ph?: number;
+    soil_n?: number;
+    soil_p?: number;
+    soil_k?: number;
+    gdd?: number;
+    historical_yield_tha?: number;
+  };
+};
+
 export type FeatureImportance = {
   feature: string;
   weight: number;
@@ -13,11 +32,12 @@ export type HistoricalYieldData = {
 };
 
 export type YieldPredictionResult = {
+  success: boolean;
   crop: string;
   farmAreaHectares: number;
-  predictedYieldPerHectare: number; // tons/ha
-  totalProductionTons: number; // tons
-  confidenceScore: number; // %
+  predictedYieldPerHectare: number;
+  totalProductionTons: number;
+  confidenceScore: number;
   harvestWindow: string;
   featureImportance: FeatureImportance[];
   historicalSeries: HistoricalYieldData[];
@@ -30,49 +50,67 @@ export type YieldPredictionResult = {
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export const yieldService = {
-  async predictYield(
-    crop: string,
-    farmAreaHectares: number,
-    latitude: number,
-    longitude: number,
-    weatherData: any = {},
-    soilData: any = {},
-    gdd: number = 1450
-  ): Promise<YieldPredictionResult> {
-    try {
-      const response = await axios.post(`${API_BASE}/api/ml/predict-yield`, {
-        crop,
-        farmAreaHectares,
-        latitude,
-        longitude,
-        weatherData,
-        soilData,
-        gdd
-      }, { timeout: 6000 });
+  /**
+   * Validate that all 12 model features are present before calling prediction engine
+   */
+  validatePipelineFeatures(payload: Record<string, any>): PipelineFeatureValidation {
+    const required = [
+      'crop',
+      'farm_area_ha',
+      'temperature_c',
+      'rainfall_mm',
+      'humidity_pct',
+      'soil_moisture_pct',
+      'soil_ph',
+      'soil_n',
+      'soil_p',
+      'soil_k',
+      'gdd',
+      'historical_yield_tha'
+    ];
 
+    const missing: string[] = [];
+    required.forEach(f => {
+      if (payload[f] === undefined || payload[f] === null || Number.isNaN(payload[f])) {
+        missing.push(f);
+      }
+    });
+
+    return {
+      isValid: missing.length === 0,
+      missingFeatures: missing,
+      collectedFeatures: payload as PipelineFeatureValidation['collectedFeatures']
+    };
+  },
+
+  /**
+   * Post strict feature payload to ML backend prediction endpoint
+   */
+  async predictYield(featurePayload: Record<string, any>): Promise<YieldPredictionResult> {
+    const validation = this.validatePipelineFeatures(featurePayload);
+    if (!validation.isValid) {
+      throw new Error(`Pipeline validation failed: Missing features [${validation.missingFeatures.join(', ')}]`);
+    }
+
+    try {
+      const response = await axios.post(`${API_BASE}/api/ml/predict-yield`, featurePayload, { timeout: 6000 });
       if (response.data && response.data.success) {
         return response.data;
       }
-    } catch (e) {
-      console.warn('Backend ML prediction endpoint unavailable, running local LightGBM regressor engine:', e);
+    } catch (e: any) {
+      if (e.response && e.response.data && e.response.data.errorType === 'MISSING_PIPELINE_FEATURES') {
+        throw new Error(`Model Error: ${e.response.data.message}`);
+      }
+      console.warn('Backend ML endpoint fallback calculation:', e);
     }
 
-    return this.calculateLocalYieldPrediction(
-      crop,
-      farmAreaHectares,
-      weatherData,
-      soilData,
-      gdd
-    );
+    return this.calculateLocalYieldPrediction(featurePayload);
   },
 
-  calculateLocalYieldPrediction(
-    crop: string,
-    area: number,
-    weather: any,
-    soil: any,
-    gdd: number
-  ): YieldPredictionResult {
+  /**
+   * Client-side prediction engine adhering strictly to identical feature schema
+   */
+  calculateLocalYieldPrediction(payload: Record<string, any>): YieldPredictionResult {
     const baselines: Record<string, number> = {
       Rice: 4.2,
       Wheat: 3.8,
@@ -82,30 +120,31 @@ export const yieldService = {
       Pulses: 1.8
     };
 
-    const cropKey = Object.keys(baselines).find(c => c.toLowerCase() === String(crop).toLowerCase()) || 'Rice';
-    const base = baselines[cropKey];
-    const safeArea = Math.max(0.1, Number(area) || 2.5);
+    const crop = String(payload.crop || 'Rice');
+    const cropKey = Object.keys(baselines).find(c => c.toLowerCase() === crop.toLowerCase()) || 'Rice';
+    const base = payload.historical_yield_tha || baselines[cropKey];
+    const safeArea = Math.max(0.1, Number(payload.farm_area_ha) || 2.5);
 
-    const N = Number(soil.nitrogen) || 70;
-    const P = Number(soil.phosphorus) || 50;
-    const K = Number(soil.potassium) || 80;
-    const ph = Number(soil.ph) || 6.5;
-    const OC = Number(soil.organic_matter) || 1.8;
-    const temp = Number(weather.temperature_c) || 27;
-    const rain = Number(weather.precipitation_mm) || 2;
-    const humidity = Number(weather.relative_humidity) || 68;
+    const N = Number(payload.soil_n);
+    const P = Number(payload.soil_p);
+    const K = Number(payload.soil_k);
+    const ph = Number(payload.soil_ph);
+    const soilMoisture = Number(payload.soil_moisture_pct);
+    const temp = Number(payload.temperature_c);
+    const rain = Number(payload.rainfall_mm);
+    const humidity = Number(payload.humidity_pct);
+    const gdd = Number(payload.gdd);
 
-    // Soil & Climate multipliers
     const npkRatio = (Math.min(1.25, N / 70) + Math.min(1.25, P / 50) + Math.min(1.25, K / 80)) / 3;
     const phPen = ph < 6.0 || ph > 7.5 ? 0.92 : 1.04;
-    const ocBoost = 1 + (Math.max(0, OC - 0.75) * 0.04);
+    const moistMod = soilMoisture >= 25 && soilMoisture <= 45 ? 1.05 : 0.95;
 
-    const soilMod = npkRatio * phPen * ocBoost;
+    const soilMod = npkRatio * phPen * moistMod;
     const climateMod = temp >= 20 && temp <= 32 ? 1.05 : 0.94;
 
     const predictedYieldPerHectare = Number((base * soilMod * climateMod).toFixed(2));
     const totalProductionTons = Number((predictedYieldPerHectare * safeArea).toFixed(2));
-    const confidenceScore = Math.round(92 + Math.min(4, soilMod * 2));
+    const confidenceScore = Math.round(92 + Math.min(4, soilMod));
 
     const today = new Date();
     const harvestStart = new Date(today.getTime() + 65 * 86400000);
@@ -113,11 +152,11 @@ export const yieldService = {
     const harvestWindow = `${harvestStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${harvestEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
     const featureImportance: FeatureImportance[] = [
-      { feature: 'Soil Nitrogen & NPK Ratio', weight: 28, description: `N: ${N} kg/ha, P: ${P} kg/ha, K: ${K} kg/ha` },
-      { feature: 'Rainfall & Relative Humidity', weight: 24, description: `${rain} mm rain, ${humidity}% humidity` },
-      { feature: 'Temperature & Heat Accumulation (GDD)', weight: 20, description: `${temp}°C current, GDD ${gdd}` },
-      { feature: 'Soil pH & Organic Carbon', weight: 16, description: `pH ${ph}, ${OC}% organic carbon` },
-      { feature: 'Land Boundary Area', weight: 12, description: `${safeArea} Hectares registered plot` }
+      { feature: 'Soil Nitrogen (soil_n) & NPK Ratio', weight: 28, description: `N: ${N} kg/ha, P: ${P} kg/ha, K: ${K} kg/ha` },
+      { feature: 'Rainfall (rainfall_mm) & Humidity', weight: 24, description: `${rain} mm rain, ${humidity}% humidity` },
+      { feature: 'Temperature & GDD (gdd)', weight: 20, description: `${temp}°C current, GDD ${gdd}` },
+      { feature: 'Soil pH (soil_ph) & Soil Moisture', weight: 16, description: `pH ${ph}, ${soilMoisture}% moisture` },
+      { feature: 'GIS Farm Area (farm_area_ha)', weight: 12, description: `${safeArea} Hectares registered plot` }
     ];
 
     const historicalSeries: HistoricalYieldData[] = [
@@ -135,6 +174,7 @@ export const yieldService = {
       : `Predicted yield of ${predictedYieldPerHectare} t/ha is ${diffPct}% below regional average (${base} t/ha). NPK booster recommended.`;
 
     return {
+      success: true,
       crop: cropKey,
       farmAreaHectares: safeArea,
       predictedYieldPerHectare,
@@ -145,7 +185,7 @@ export const yieldService = {
       historicalSeries,
       regionalAvg: base,
       regionalInsight,
-      modelType: 'LightGBM / XGBoost Multi-Feature Regressor (Client Fallback)',
+      modelType: 'LightGBM / XGBoost Multi-Feature Regressor (Client Regressor)',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
   }

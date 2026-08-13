@@ -3,18 +3,28 @@ const { generateAIResponse } = require('../services/aiService');
 
 async function createQuery(req, res) {
   try {
-    const { userId, text, roomId } = req.body;
+    const { userId, text, roomId, farmContext } = req.body;
     if (!text) return res.status(400).json({ error: 'text is required' });
 
-    const query = await Query.create({ userId: userId || null, text, status: 'pending' });
+    let queryId = null;
+    try {
+      const query = await Query.create({ userId: userId || null, text, status: 'pending' });
+      queryId = query._id;
+    } catch (dbErr) {
+      console.warn('Query DB log fallback:', dbErr.message);
+    }
 
-    // Fire-and-forget AI generation
-    generateAIResponse({ queryId: query._id, text, roomId }).catch(() => {});
+    const { generateChatResponse } = require('../services/aiService');
+    const answer = await generateChatResponse(text, farmContext);
 
-    res.status(201).json({ id: query._id });
+    if (queryId) {
+      Query.findByIdAndUpdate(queryId, { response: answer, status: 'answered' }).catch(() => {});
+    }
+
+    res.status(200).json({ success: true, id: queryId, response: answer });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'failed to create query' });
+    console.error('Error in createQuery:', err);
+    res.status(500).json({ error: 'failed to create query', message: err.message });
   }
 }
 

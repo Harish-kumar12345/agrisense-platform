@@ -17,7 +17,7 @@ function initChatSockets(io) {
     });
 
     // Handle user messages (matches frontend expectation)
-    socket.on('user_message', async ({ roomId, text, userId }) => {
+    socket.on('user_message', async ({ roomId, text, userId, farmContext }) => {
       try {
         console.log(`💬 Received message in room ${roomId}: ${text.substring(0, 50)}...`);
         
@@ -28,7 +28,7 @@ function initChatSockets(io) {
         const { generateChatResponse } = require('../services/aiService');
         
         try {
-          const aiResponse = await generateChatResponse(text);
+          const aiResponse = await generateChatResponse(text, farmContext);
           
           // Send AI response to all users in room
           io.to(roomId).emit('assistant_message', { 

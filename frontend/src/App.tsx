@@ -9,6 +9,9 @@ import { SoilAnalysisModule } from './components/Soil/SoilAnalysisModule';
 import { YieldPredictionModule } from './components/Yield/YieldPredictionModule';
 import { DiseaseRiskModule } from './components/Disease/DiseaseRiskModule';
 import { FertilizerPesticideModule } from './components/Inventory/FertilizerPesticideModule';
+import { HarvestManagementModule } from './components/Harvest/HarvestManagementModule';
+import { CropPriceModule } from './components/CropPrice/CropPriceModule';
+import { FarmAnalyticsDashboard } from './components/Analytics/FarmAnalyticsDashboard';
 import { FarmData } from './services/farmService';
 import { OfficerLogin } from './components/OfficerLogin';
 import { OfficerDashboard } from './components/OfficerDashboard';
@@ -16,7 +19,7 @@ import { AuthWrapper } from './components/AuthWrapper';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { LanguageToggle } from './components/LanguageToggle';
-import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain, Bug, Pill } from 'lucide-react';
+import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain, Bug, Pill, Tractor, IndianRupee, BarChart3 } from 'lucide-react';
 
 type LocationData = {
   latitude: number;
@@ -84,7 +87,10 @@ function AppContent() {
             <nav className="flex items-center gap-2">
               <button className={`btn !py-2 !px-3 ${(view==='home' || view==='dashboard')?'opacity-100':'opacity-85'}`} onClick={() => setView('home')}><Sprout className="w-4 h-4"/> {t('nav.home')}</button>
               <button className={`btn !py-2 !px-3 ${view==='gis'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('gis')}><MapPin className="w-4 h-4"/> Farm GIS</button>
+              <button className={`btn !py-2 !px-3 ${view==='analytics'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold`} onClick={() => setView('analytics')}><BarChart3 className="w-4 h-4"/> Analytics</button>
               <button className={`btn !py-2 !px-3 ${view==='yield'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('yield')}><Brain className="w-4 h-4"/> AI Yield</button>
+              <button className={`btn !py-2 !px-3 ${view==='harvest'?'opacity-100':'opacity-85'} bg-amber-50 text-amber-900 border border-amber-300 font-bold`} onClick={() => setView('harvest')}><Tractor className="w-4 h-4"/> Harvest</button>
+              <button className={`btn !py-2 !px-3 ${view==='prices'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold`} onClick={() => setView('prices')}><IndianRupee className="w-4 h-4"/> Crop Prices</button>
               <button className={`btn !py-2 !px-3 ${view==='disease'?'opacity-100':'opacity-85'} bg-rose-50 text-rose-700 border border-rose-200`} onClick={() => setView('disease')}><Bug className="w-4 h-4"/> Disease Risk</button>
               <button className={`btn !py-2 !px-3 ${view==='inventory'?'opacity-100':'opacity-85'} bg-purple-50 text-purple-700 border border-purple-200`} onClick={() => setView('inventory')}><Pill className="w-4 h-4"/> Inventory</button>
               <button className={`btn !py-2 !px-3 ${view==='soil'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('soil')}><FlaskConical className="w-4 h-4"/> Soil Analysis</button>
@@ -120,8 +126,29 @@ function AppContent() {
             onGoToDashboard={() => setView('dashboard')}
           />
         )}
+        {view === 'analytics' && (
+          <FarmAnalyticsDashboard
+            farm={activeFarm}
+            location={dashboardData?.location}
+            crop={dashboardData?.crop}
+          />
+        )}
         {view === 'yield' && (
           <YieldPredictionModule
+            farm={activeFarm}
+            location={dashboardData?.location}
+            crop={dashboardData?.crop}
+          />
+        )}
+        {view === 'harvest' && (
+          <HarvestManagementModule
+            farm={activeFarm}
+            location={dashboardData?.location}
+            crop={dashboardData?.crop}
+          />
+        )}
+        {view === 'prices' && (
+          <CropPriceModule
             farm={activeFarm}
             location={dashboardData?.location}
             crop={dashboardData?.crop}

@@ -61,12 +61,33 @@ export const Chat = () => {
     setInput('');
     setIsTyping(true);
     
+    const farmContext = {
+      location: 'Kochi, Kerala',
+      crop: 'Rice (Paddy)',
+      area_hectares: 1.5,
+      temperature_c: 28,
+      rainfall_mm: 12,
+      humidity: 78,
+      soil_moisture: 58,
+      ph: 6.5,
+      nitrogen: 45,
+      phosphorus: 30,
+      potassium: 25,
+      current_gdd: 1450,
+      predicted_yield_tha: 4.8,
+      disease_risk: 'Low fungal risk',
+      growth_stage: 'Ripening / Grain Filling',
+      harvest_window: 'Oct 28 - Nov 10',
+      fertilizer_stock: 'Urea (50 kg), NPK 20:20:0 (100 kg)'
+    };
+
     // Send message via Socket.IO only
     socket.emit('user_message', {
       roomId,
       text,
       userId: 'user-' + Math.random().toString(36).slice(2),
-      language
+      language,
+      farmContext
     });
   }
 

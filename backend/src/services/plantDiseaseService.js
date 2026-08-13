@@ -120,7 +120,7 @@ class PlantDiseaseService {
 
   async analyzeWithGemini(imageBuffer) {
     try {
-      const model = this.geminiClient.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = this.geminiClient.getGenerativeModel({ model: "gemini-3.5-flash" });
       
       const prompt = `Analyze this plant image and identify any diseases or health issues. 
       

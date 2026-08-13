@@ -25,10 +25,15 @@ import {
   IndianRupee,
   Navigation,
   Building2,
-  User
+  User,
+  Tractor,
+  BarChart3
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { FarmData } from '../services/farmService';
+import { HarvestManagementModule } from './Harvest/HarvestManagementModule';
+import { CropPriceModule } from './CropPrice/CropPriceModule';
+import { KrishiSevaKendraModule } from './KrishiSeva/KrishiSevaKendraModule';
+import { FarmAnalyticsDashboard } from './Analytics/FarmAnalyticsDashboard';
 
 // API endpoints from environment variables
 const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
@@ -415,63 +420,53 @@ Please provide specific, actionable recommendations covering:
 
 Keep recommendations practical and specific to the current conditions and crop type.`;
 
-    console.log('Calling Gemini API for agricultural advice...');
-    
-    // Make actual Gemini API call
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+    console.log('Calling backend AI Advisor API for agricultural advice...');
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
+    const farmContext = {
+      location: weather.location.city,
+      crop: crop,
+      area_hectares: 1.5,
+      temperature_c: weather.current.temperature_c,
+      rainfall_mm: weather.current.description.includes('rain') ? 15 : 0,
+      humidity: weather.current.relative_humidity,
+      soil_moisture: soil.moisture,
+      ph: soil.ph,
+      nitrogen: soil.nitrogen,
+      phosphorus: soil.phosphorus,
+      potassium: soil.potassium,
+      current_gdd: 1450,
+      predicted_yield_tha: 4.8,
+      disease_risk: 'Low fungal monitoring',
+      growth_stage: 'Ripening / Grain Filling',
+      harvest_window: 'Oct 28 - Nov 10',
+      fertilizer_stock: 'Urea (50 kg), NPK 20:20:0 (100 kg)'
+    };
+
+    const response = await fetch(`${backendUrl}/api/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE"
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE"
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE"
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE"
-          }
-        ]
+        text: userQuestion,
+        farmContext
       })
     });
 
     if (!response.ok) {
-      console.error('Gemini API error:', response.status, response.statusText);
-      throw new Error(`Gemini API failed: ${response.status}`);
+      console.error('Backend AI Advisor API error:', response.status);
+      throw new Error(`AI Advisor API failed: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('Gemini API response received');
-
-    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-      return data.candidates[0].content.parts[0].text;
+    if (data && data.response) {
+      return data.response;
     } else {
-      throw new Error('Invalid response format from Gemini API');
+      throw new Error('Invalid response format from AI Advisor API');
     }
-    
   } catch (error) {
-    console.error('Gemini AI error:', error);
+    console.error('AI Advisor error:', error);
     
     // Fallback to enhanced mock response if API fails
     return `🌾 **AGRICULTURAL ADVISORY FOR ${crop.toUpperCase()}**
@@ -910,6 +905,8 @@ function Dashboard({ location, crop, farmDetails, onBack }: DashboardProps) {
           <div className="flex flex-wrap gap-2">
             {[
               { id: 'overview', label: t('home.overview'), icon: Activity },
+              { id: 'analytics', label: '📊 Analytics', icon: BarChart3 },
+              { id: 'harvest', label: '🚜 Harvest & Activities', icon: Tractor },
               { id: 'weather', label: t('home.weather_details'), icon: CloudSun },
               { id: 'soil', label: t('home.soil_analysis'), icon: Mountain },
               { id: 'crop-prices', label: t('home.crop_prices'), icon: IndianRupee },
@@ -1501,270 +1498,36 @@ function Dashboard({ location, crop, farmDetails, onBack }: DashboardProps) {
           </div>
         )}
 
-        {/* Crop Prices Tab */}
+        {/* Farm Analytics Dashboard Tab */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-6">
+            <FarmAnalyticsDashboard
+              farm={farmDetails || null}
+              location={location}
+              crop={crop}
+            />
+          </div>
+        )}
+
+        {/* Crop Prices & Revenue Intelligence Tab */}
         {activeTab === 'crop-prices' && (
           <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <IndianRupee className="w-6 h-6 text-green-600" />
-                  <h3 className="text-xl font-bold text-gray-800">{t('home.kerala_crop_prices')}</h3>
-                </div>
-                <button
-                  onClick={handleFetchCropPrices}
-                  disabled={cropPricesLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw className={`w-4 h-4 ${cropPricesLoading ? 'animate-spin' : ''}`} />
-                  {cropPricesLoading ? 'Updating...' : 'Refresh Prices'}
-                </button>
-              </div>
-
-              {cropPricesLoading && !cropPricesData && (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto mb-2" />
-                    <p className="text-gray-600">Loading crop prices...</p>
-                  </div>
-                </div>
-              )}
-
-              {cropPricesData && (
-                <div className="space-y-4">
-                  <div className="text-sm text-gray-600 mb-4">
-                    <p>Location: {cropPricesData.location}</p>
-                    <p>Last Updated: {new Date(cropPricesData.lastUpdated).toLocaleString()}</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {cropPricesData.prices.map((crop, index) => (
-                      <div key={index} className="bg-gradient-to-br from-green-50 to-blue-50 rounded-xl p-4 border border-green-100">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h4 className="font-semibold text-gray-800">{crop.name}</h4>
-                            <p className="text-sm text-gray-600">{crop.nameLocal}</p>
-                            <p className="text-xs text-gray-500">{crop.market}</p>
-                          </div>
-                          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                            crop.trend === 'up' 
-                              ? 'bg-green-100 text-green-700' 
-                              : crop.trend === 'down' 
-                              ? 'bg-red-100 text-red-700' 
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            <TrendingUp className={`w-3 h-3 ${
-                              crop.trend === 'down' ? 'rotate-180' : crop.trend === 'stable' ? 'rotate-90' : ''
-                            }`} />
-                            {crop.change > 0 ? '+' : ''}{crop.change}%
-                          </div>
-                        </div>
-                        
-                        <div className="text-2xl font-bold text-gray-900 mb-1">
-                          ₹{crop.price.toLocaleString()}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          {crop.unit}
-                        </div>
-                        
-                        <div className="mt-3 pt-3 border-t border-green-200">
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>Updated: {new Date(crop.lastUpdated).toLocaleTimeString()}</span>
-                            <span className={`font-medium ${
-                              crop.trend === 'up' ? 'text-green-600' : 
-                              crop.trend === 'down' ? 'text-red-600' : 'text-gray-600'
-                            }`}>
-                              {crop.trend === 'up' ? '↗ Rising' : 
-                               crop.trend === 'down' ? '↘ Falling' : '→ Stable'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5" />
-                      <div className="text-sm text-blue-800">
-                        <h4 className="font-semibold mb-1">Price Information Notice</h4>
-                        <p>
-                          These prices are indicative and may vary by market, quality, and local conditions. 
-                          Always verify current rates with local traders and APMC markets before making transactions.
-                          Prices are updated periodically and may not reflect real-time market conditions.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!cropPricesLoading && !cropPricesData && (
-                <div className="text-center py-12">
-                  <IndianRupee className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 mb-4">Click "Refresh Prices" to load current crop prices</p>
-                </div>
-              )}
-            </div>
+            <CropPriceModule
+              farm={farmDetails || null}
+              location={location}
+              crop={crop}
+            />
           </div>
         )}
 
         {/* Krishi Seva Kendra Tab */}
         {activeTab === 'krishi-seva-kendra' && (
           <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-6 h-6 text-blue-600" />
-                  <h3 className="text-xl font-bold text-gray-800">{t('home.nearest_krishi_seva_kendra')}</h3>
-                </div>
-                <button
-                  onClick={handleFetchKrishiSevaKendra}
-                  disabled={krishiSevaKendraLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw className={`w-4 h-4 ${krishiSevaKendraLoading ? 'animate-spin' : ''}`} />
-                  {krishiSevaKendraLoading ? 'Locating...' : 'Find Centers'}
-                </button>
-              </div>
-
-              {krishiSevaKendraLoading && !krishiSevaKendraData && (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
-                    <p className="text-gray-600">Finding nearest Krishi Seva Kendras...</p>
-                  </div>
-                </div>
-              )}
-
-              {krishiSevaKendraData && (
-                <div className="space-y-4">
-                  <div className="text-sm text-gray-600 mb-6">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MapPin className="w-4 h-4 text-blue-600" />
-                      <span>Your Location: {krishiSevaKendraData.userLocation.district}, Kerala</span>
-                    </div>
-                    <p>Last Updated: {new Date(krishiSevaKendraData.lastUpdated).toLocaleString()}</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {krishiSevaKendraData.centers.slice(0, 6).map((center, index) => (
-                      <div key={index} className="bg-gradient-to-br from-blue-50 to-green-50 rounded-xl p-6 border border-blue-100 hover:shadow-lg transition-shadow">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                                index === 0 ? 'bg-green-600' : index === 1 ? 'bg-blue-600' : 'bg-gray-600'
-                              }`}>
-                                {index + 1}
-                              </div>
-                              <div>
-                                <h4 className="font-bold text-gray-800 text-lg">{center.name}</h4>
-                                <p className="text-sm text-gray-600">{center.nameLocal}</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold text-blue-600">
-                              {center.distance.toFixed(1)} km
-                            </div>
-                            <div className="text-xs text-gray-500">distance</div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3 mb-4">
-                          <div className="flex items-start gap-2">
-                            <MapPin className="w-4 h-4 text-gray-500 mt-0.5" />
-                            <div className="text-sm text-gray-700">
-                              <p>{center.address}</p>
-                              <p>{center.district}, {center.state} - {center.pincode}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">{center.workingHours}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">Officer: {center.officerName}</span>
-                          </div>
-                        </div>
-
-                        <div className="mb-4">
-                          <h5 className="font-semibold text-gray-800 mb-2 text-sm">Services Available:</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {center.services.slice(0, 3).map((service, serviceIndex) => (
-                              <span
-                                key={serviceIndex}
-                                className="bg-white text-blue-700 px-2 py-1 rounded-full text-xs font-medium border border-blue-200"
-                              >
-                                {service}
-                              </span>
-                            ))}
-                            {center.services.length > 3 && (
-                              <span className="text-xs text-gray-500 px-2 py-1">
-                                +{center.services.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-4 border-t border-blue-200">
-                          <div className="space-y-1">
-                            <a 
-                              href={`tel:${center.phone}`}
-                              className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                            >
-                              📞 {center.phone}
-                            </a>
-                            <a 
-                              href={`mailto:${center.email}`}
-                              className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                            >
-                              ✉️ Contact
-                            </a>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${center.coordinates.latitude},${center.coordinates.longitude}`, '_blank')}
-                              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                            >
-                              <Navigation className="w-3 h-3" />
-                              Directions
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 p-4 bg-green-50 rounded-xl border border-green-200">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                      <div className="text-sm text-green-800">
-                        <h4 className="font-semibold mb-1">Krishi Seva Kendra Services</h4>
-                        <p>
-                          These centers provide free agricultural advisory services, soil testing, seed distribution, 
-                          and technical guidance. Visit during working hours or call ahead to confirm officer availability.
-                          Services may vary by center and season.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!krishiSevaKendraLoading && !krishiSevaKendraData && (
-                <div className="text-center py-12">
-                  <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 mb-4">Click "Find Centers" to locate nearest Krishi Seva Kendras</p>
-                  <p className="text-sm text-gray-500">We'll show you the closest agricultural support centers in your area</p>
-                </div>
-              )}
-            </div>
+            <KrishiSevaKendraModule
+              farm={farmDetails || null}
+              location={location}
+              onGoToGIS={onBack}
+            />
           </div>
         )}
 
@@ -2002,6 +1765,17 @@ function Dashboard({ location, crop, farmDetails, onBack }: DashboardProps) {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Harvest Management & Activity Timeline Tab */}
+        {activeTab === 'harvest' && (
+          <div className="space-y-6">
+            <HarvestManagementModule
+              farm={farmDetails || null}
+              location={location}
+              crop={crop}
+            />
           </div>
         )}
       </div>

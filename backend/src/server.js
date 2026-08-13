@@ -49,10 +49,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-const farmRoutes = require('./routes/farm');
 const yieldPredictionRoutes = require('./routes/yieldPrediction');
 const diseaseRiskRoutes = require('./routes/diseaseRisk');
 const inventoryRoutes = require('./routes/inventory');
+const farmActivityRoutes = require('./routes/farmActivity');
+const harvestManagementRoutes = require('./routes/harvestManagement');
 
 // Routes
 app.use('/api/query', queryRoutes);
@@ -64,6 +65,8 @@ app.use('/api/farms', farmRoutes);
 app.use('/api/ml', yieldPredictionRoutes);
 app.use('/api/ml', diseaseRiskRoutes);
 app.use('/api', inventoryRoutes);
+app.use('/api/farm-activities', farmActivityRoutes);
+app.use('/api/harvest-management', harvestManagementRoutes);
 
 // Socket.io
 initChatSockets(io);

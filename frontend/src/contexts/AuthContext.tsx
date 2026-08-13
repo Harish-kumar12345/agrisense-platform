@@ -21,13 +21,20 @@ interface AuthContextType {
 const AuthContext = createContext(undefined)
 
 export function AuthProvider({ children }: { children: any }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('agrisense_guest_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!supabase) {
-      setLoading(false)
-      return
+      setLoading(false);
+      return;
     }
 
     try {
@@ -38,12 +45,12 @@ export function AuthProvider({ children }: { children: any }) {
             id: session.user.id,
             email: session.user.email,
             name: session.user.user_metadata?.name
-          })
+          });
         }
-        setLoading(false)
+        setLoading(false);
       }).catch(() => {
-        setLoading(false)
-      })
+        setLoading(false);
+      });
 
       // Listen for auth changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -53,40 +60,42 @@ export function AuthProvider({ children }: { children: any }) {
               id: session.user.id,
               email: session.user.email,
               name: session.user.user_metadata?.name
-            })
+            });
           } else {
-            setUser(null)
+            // Preserve guest user if currently set
+            setUser(prev => (prev?.isGuest ? prev : null));
           }
-          setLoading(false)
+          setLoading(false);
         }
-      )
+      );
 
-      return () => subscription?.unsubscribe()
+      return () => subscription?.unsubscribe();
     } catch (error) {
-      console.warn('Supabase not configured properly, auth features disabled')
-      setLoading(false)
+      console.warn('Supabase not configured properly, auth features disabled');
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   const login = async (email: string, password: string) => {
     if (!supabase) {
-      throw new Error('Supabase not configured. Please set up your Supabase credentials.')
+      throw new Error('Supabase not configured. Please set up your Supabase credentials.');
     }
     
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
-      })
-      if (error) throw error
+      });
+      if (error) throw error;
+      try { localStorage.removeItem('agrisense_guest_user'); } catch (e) {}
     } catch (error) {
-      throw error
+      throw error;
     }
-  }
+  };
 
   const signup = async (email: string, password: string, name: string) => {
     if (!supabase) {
-      throw new Error('Supabase not configured. Please set up your Supabase credentials.')
+      throw new Error('Supabase not configured. Please set up your Supabase credentials.');
     }
     
     try {
@@ -98,37 +107,47 @@ export function AuthProvider({ children }: { children: any }) {
             name
           }
         }
-      })
-      if (error) throw error
+      });
+      if (error) throw error;
+      try { localStorage.removeItem('agrisense_guest_user'); } catch (e) {}
     } catch (error) {
-      throw error
+      throw error;
     }
-  }
+  };
 
   const logout = async () => {
+    try {
+      localStorage.removeItem('agrisense_guest_user');
+    } catch (e) {}
+
     if (!supabase) {
-      setUser(null)
-      return
+      setUser(null);
+      return;
     }
     
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (error) {
-      console.error('Logout error:', error)
-      setUser(null)
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
     }
-  }
+  };
 
   const continueAsGuest = () => {
-    setUser({
+    const guestUser: User = {
       id: 'guest-' + Math.random().toString(36).slice(2),
       name: 'Guest User',
       isGuest: true
-    })
-  }
+    };
+    try {
+      localStorage.setItem('agrisense_guest_user', JSON.stringify(guestUser));
+    } catch (e) {}
+    setUser(guestUser);
+  };
 
-  const isGuest = user?.isGuest || false
+  const isGuest = user?.isGuest || false;
 
   const value = {
     user,
@@ -138,9 +157,9 @@ export function AuthProvider({ children }: { children: any }) {
     signup,
     logout,
     continueAsGuest
-  }
+  };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -3,7 +3,12 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff, User, ArrowRight, UserPlus } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-export function Signup({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
+interface SignupProps {
+  onSwitchToLogin: () => void;
+  onGuestLogin?: () => void;
+}
+
+export function Signup({ onSwitchToLogin, onGuestLogin }: SignupProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -45,7 +50,11 @@ export function Signup({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
   }
 
   const handleGuestLogin = () => {
-    continueAsGuest()
+    if (onGuestLogin) {
+      onGuestLogin();
+    } else {
+      continueAsGuest();
+    }
   }
 
   return (

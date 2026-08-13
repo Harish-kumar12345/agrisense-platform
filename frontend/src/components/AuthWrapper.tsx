@@ -4,19 +4,33 @@ import { Signup } from './Signup'
 import { useAuth } from '../contexts/AuthContext'
 
 export function AuthWrapper({ children }: { children: any }) {
-  const [showSignup, setShowSignup] = useState(false)
-  const { user, isGuest, continueAsGuest } = useAuth()
+  const [showSignup, setShowSignup] = useState(false);
+  const { user, isGuest, loading, continueAsGuest } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-sm font-medium text-slate-300">Loading AgriSense...</p>
+        </div>
+      </div>
+    );
+  }
 
   // If user is authenticated (logged in or guest), show the main app
   if (user || isGuest) {
-    return <>{children}</>
+    return <>{children}</>;
   }
 
   // Otherwise show login/signup
   return (
     <>
       {showSignup ? (
-        <Signup onSwitchToLogin={() => setShowSignup(false)} />
+        <Signup
+          onSwitchToLogin={() => setShowSignup(false)}
+          onGuestLogin={continueAsGuest}
+        />
       ) : (
         <Login 
           onSwitchToSignup={() => setShowSignup(true)}
@@ -24,5 +38,5 @@ export function AuthWrapper({ children }: { children: any }) {
         />
       )}
     </>
-  )
+  );
 }

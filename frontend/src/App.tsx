@@ -3,13 +3,15 @@ import { Chat } from './components/Chat';
 import { Home } from './components/Home';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
+import { FarmGISPage } from './components/FarmGIS/FarmGISPage';
+import { FarmData } from './services/farmService';
 import { OfficerLogin } from './components/OfficerLogin';
 import { OfficerDashboard } from './components/OfficerDashboard';
 import { AuthWrapper } from './components/AuthWrapper';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { LanguageToggle } from './components/LanguageToggle';
-import { Sprout, MessageSquare, Shield, LogOut, User } from 'lucide-react';
+import { Sprout, MessageSquare, Shield, LogOut, User, MapPin } from 'lucide-react';
 
 type LocationData = {
   latitude: number;
@@ -23,9 +25,11 @@ type LocationData = {
 function AppContent() {
   const [token, setToken] = useState(null);
   const [view, setView] = useState('home');
+  const [activeFarm, setActiveFarm] = useState<FarmData | null>(null);
   const [dashboardData, setDashboardData] = useState<{
     location: LocationData;
     crop: string;
+    farmDetails?: FarmData;
   } | null>(null);
   const { user, logout } = useAuth();
   const { t } = useLanguage();
@@ -39,8 +43,22 @@ function AppContent() {
   };
 
   const handleDashboardSubmit = (location: LocationData, crop: string) => {
-    setDashboardData({ location, crop });
+    setDashboardData({ location, crop, farmDetails: activeFarm || undefined });
     setView('dashboard');
+  };
+
+  const handleSelectFarmFromGIS = (farm: FarmData) => {
+    setActiveFarm(farm);
+    setDashboardData({
+      location: {
+        latitude: farm.latitude,
+        longitude: farm.longitude,
+        city: farm.location_name,
+        country: 'India'
+      },
+      crop: farm.crop,
+      farmDetails: farm
+    });
   };
 
   const handleBackToLanding = () => {
@@ -60,6 +78,7 @@ function AppContent() {
           <div className="flex items-center gap-4">
             <nav className="flex items-center gap-2">
               <button className={`btn !py-2 !px-3 ${(view==='home' || view==='dashboard')?'opacity-100':'opacity-85'}`} onClick={() => setView('home')}><Sprout className="w-4 h-4"/> {t('nav.home')}</button>
+              <button className={`btn !py-2 !px-3 ${view==='gis'?'opacity-100':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('gis')}><MapPin className="w-4 h-4"/> Farm GIS</button>
               <button className={`btn !py-2 !px-3 ${view==='chat'?'opacity-100':'opacity-85'}`} onClick={() => setView('chat')}><MessageSquare className="w-4 h-4"/> {t('nav.chat')}</button>
               <button className={`btn !py-2 !px-3 bg-white text-brand-green border border-brand-green hover:bg-brand-light ${view==='officer'?'opacity-100':'opacity-85'}`} onClick={() => setView('officer')}><Shield className="w-4 h-4"/> {t('nav.officer')}</button>
             </nav>
@@ -85,10 +104,17 @@ function AppContent() {
         {view === 'home' && (
           <LandingPage onSubmit={handleDashboardSubmit} />
         )}
+        {view === 'gis' && (
+          <FarmGISPage
+            onSelectFarmForDashboard={handleSelectFarmFromGIS}
+            onGoToDashboard={() => setView('dashboard')}
+          />
+        )}
         {view === 'dashboard' && dashboardData && (
           <Dashboard 
             location={dashboardData.location}
             crop={dashboardData.crop}
+            farmDetails={dashboardData.farmDetails}
             onBack={handleBackToLanding}
           />
         )}

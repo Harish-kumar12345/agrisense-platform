@@ -28,6 +28,7 @@ import {
   User
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { FarmData } from '../services/farmService';
 
 // API endpoints from environment variables
 const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
@@ -150,6 +151,7 @@ type KrishiSevaKendraData = {
 interface DashboardProps {
   location: LocationData;
   crop: string;
+  farmDetails?: FarmData;
   onBack: () => void;
 }
 
@@ -693,7 +695,7 @@ const fetchKrishiSevaKendraData = async (latitude: number, longitude: number): P
   }
 };
 
-function Dashboard({ location, crop, onBack }: DashboardProps) {
+function Dashboard({ location, crop, farmDetails, onBack }: DashboardProps) {
   const { t, language } = useLanguage();
   
   // Helper function to translate soil values
@@ -878,10 +880,10 @@ function Dashboard({ location, crop, onBack }: DashboardProps) {
             <span>{t('dashboard.back_to_setup')}</span>
           </button>
           
-          <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-xl">
-            <MapPin className="w-4 h-4 text-gray-600" />
-            <span className="text-sm font-medium text-gray-800">
-              {location.city}, {location.country} | {crop}
+          <div className="flex items-center gap-3 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-emerald-200 shadow-sm">
+            <MapPin className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm font-semibold text-gray-800">
+              📍 {location.city}{location.state ? `, ${location.state}` : ''} | 🌾 {crop} {farmDetails?.area_hectares ? `| ${farmDetails.area_hectares} ha` : ''}
             </span>
           </div>
         </div>

@@ -16,6 +16,7 @@ const infoRoutes = require('./routes/info');
 const officerRoutes = require('./routes/officer');
 const krishiSevaKendraRoutes = require('./routes/krishiSevaKendra');
 const cropPricesRoutes = require('./routes/cropPrices');
+const farmRoutes = require('./routes/farm');
 const { initChatSockets } = require('./sockets/chat');
 const { setIo } = require('./utils/io');
 
@@ -54,6 +55,7 @@ app.use('/api', infoRoutes);
 app.use('/api/officer', officerRoutes);
 app.use('/api/krishi-seva-kendra', krishiSevaKendraRoutes);
 app.use('/api/crop-prices', cropPricesRoutes);
+app.use('/api/farms', farmRoutes);
 
 // Socket.io
 initChatSockets(io);

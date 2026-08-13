@@ -406,19 +406,20 @@ function LandingPage({ onSubmit }: LandingPageProps) {
                   </div>
                   
                   {/* Location Actions */}
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
+                      type="button"
                       onClick={handleGetCurrentLocation}
                       disabled={locationLoading}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                      className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm shadow-sm"
                       title="Use Current Location"
                     >
                       {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                      Use My Location
+                      <span>Use My Location</span>
                     </button>
                     
                     {/* Popular Kerala locations quick select */}
-                    <div className="flex-1">
+                    <div className="w-full">
                       <select
                         value=""
                         onChange={(e) => {
@@ -429,9 +430,9 @@ function LandingPage({ onSubmit }: LandingPageProps) {
                             setCurrentLocation(null);
                           }
                         }}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all bg-gray-50 focus:bg-white text-sm"
+                        className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all bg-gray-50 focus:bg-white text-sm font-medium text-gray-700"
                       >
-                        <option value="">Quick Select</option>
+                        <option value="">Quick Select Region</option>
                         <optgroup label="Kerala Districts">
                           <option value="Kochi, Kerala">Kochi, Kerala</option>
                           <option value="Thiruvananthapuram, Kerala">Thiruvananthapuram, Kerala</option>

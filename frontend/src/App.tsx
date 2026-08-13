@@ -21,6 +21,7 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { SmartAlertsCenter } from './components/Alerts/SmartAlertsCenter';
 import { alertService } from './services/alertService';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Navbar } from './components/Navigation/Navbar';
 import { Sprout, MessageSquare, Shield, LogOut, User, MapPin, CloudSun, FlaskConical, Brain, Bug, Pill, Tractor, IndianRupee, BarChart3, Bell } from 'lucide-react';
 
 type LocationData = {
@@ -121,56 +122,15 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-neutral-light flex flex-col">
-      {/* Dynamic Main App Navbar */}
-      <header className="navbar border-b border-gray-100 sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-brand-light text-brand-green"><Sprout className="w-5 h-5" /></div>
-            <h1 className="text-lg font-semibold text-gray-800">AgriSense Assistant</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <nav className="flex items-center gap-2 overflow-x-auto py-1">
-              <button type="button" className={`btn !py-2 !px-3 relative bg-red-50 text-red-700 border border-red-200 font-bold`} onClick={() => setIsAlertsOpen(true)}>
-                <Bell className="w-4 h-4 text-red-600" />
-                Alerts
-                {unreadAlertCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-600 text-white animate-bounce shadow">
-                    {unreadAlertCount}
-                  </span>
-                )}
-              </button>
-              <button type="button" className={`btn !py-2 !px-3 ${(view==='home' || view==='dashboard')?'opacity-100 font-bold border-brand-green':'opacity-85'}`} onClick={() => setView('home')}><Sprout className="w-4 h-4"/> {t('nav.home')}</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='gis'?'opacity-100 font-bold':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('gis')}><MapPin className="w-4 h-4"/> Farm GIS</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='analytics'?'opacity-100 font-bold':'opacity-85'} bg-emerald-50 text-emerald-800 border border-emerald-300`} onClick={() => setView('analytics')}><BarChart3 className="w-4 h-4"/> Analytics</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='yield'?'opacity-100 font-bold':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('yield')}><Brain className="w-4 h-4"/> AI Yield</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='harvest'?'opacity-100 font-bold':'opacity-85'} bg-amber-50 text-amber-900 border border-amber-300`} onClick={() => setView('harvest')}><Tractor className="w-4 h-4"/> Harvest</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='prices'?'opacity-100 font-bold':'opacity-85'} bg-emerald-50 text-emerald-800 border border-emerald-300`} onClick={() => setView('prices')}><IndianRupee className="w-4 h-4"/> Crop Prices</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='disease'?'opacity-100 font-bold':'opacity-85'} bg-rose-50 text-rose-700 border border-rose-200`} onClick={() => setView('disease')}><Bug className="w-4 h-4"/> Disease Risk</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='inventory'?'opacity-100 font-bold':'opacity-85'} bg-purple-50 text-purple-700 border border-purple-200`} onClick={() => setView('inventory')}><Pill className="w-4 h-4"/> Inventory</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='soil'?'opacity-100 font-bold':'opacity-85'} bg-emerald-50 text-emerald-700 border border-emerald-200`} onClick={() => setView('soil')}><FlaskConical className="w-4 h-4"/> Soil Analysis</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='weather'?'opacity-100 font-bold':'opacity-85'} bg-teal-50 text-teal-700 border border-teal-200`} onClick={() => setView('weather')}><CloudSun className="w-4 h-4"/> Weather</button>
-              <button type="button" className={`btn !py-2 !px-3 ${view==='chat'?'opacity-100 font-bold':'opacity-85'}`} onClick={() => setView('chat')}><MessageSquare className="w-4 h-4"/> {t('nav.chat')}</button>
-              <button type="button" className={`btn !py-2 !px-3 bg-white text-brand-green border border-brand-green hover:bg-brand-light ${view==='officer'?'opacity-100 font-bold':'opacity-85'}`} onClick={() => setView('officer')}><Shield className="w-4 h-4"/> {t('nav.officer')}</button>
-            </nav>
-            {user && (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-50 rounded-lg border border-green-200">
-                  <User className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-700 font-medium">{user.name || user.email || t('nav.welcome')}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                  title={t('nav.logout')}
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      {/* Sleek Modern Application Navbar */}
+      <Navbar
+        currentView={view}
+        onSelectView={(v) => setView(v)}
+        unreadAlertCount={unreadAlertCount}
+        onOpenAlerts={() => setIsAlertsOpen(true)}
+        user={user}
+        onLogout={handleLogout}
+      />
       <main className="flex-1">
         <ErrorBoundary>
           {view === 'home' && (

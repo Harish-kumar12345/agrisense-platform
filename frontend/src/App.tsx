@@ -58,7 +58,6 @@ function AppContent() {
             <h1 className="text-lg font-semibold">AgriSense Assistant</h1>
           </div>
           <div className="flex items-center gap-4">
-            <LanguageToggle />
             <nav className="flex items-center gap-2">
               <button className={`btn !py-2 !px-3 ${(view==='home' || view==='dashboard')?'opacity-100':'opacity-85'}`} onClick={() => setView('home')}><Sprout className="w-4 h-4"/> {t('nav.home')}</button>
               <button className={`btn !py-2 !px-3 ${view==='chat'?'opacity-100':'opacity-85'}`} onClick={() => setView('chat')}><MessageSquare className="w-4 h-4"/> {t('nav.chat')}</button>

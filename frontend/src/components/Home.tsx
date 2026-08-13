@@ -1313,7 +1313,7 @@ Provide ONE priority action and ONE monitoring advice. Keep it concise and actio
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 {(weatherData?.daily || []).map((day, index) => {
                   const dayDate = new Date(day.date);
-                  const dayName = dayDate.toLocaleDateString(language === 'ml' ? 'ml-IN' : 'en-US', { weekday: 'short' });
+                  const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
                   
                   // Function to translate weather description (same as hourly)
                   const translateWeatherDescription = (description: string) => {

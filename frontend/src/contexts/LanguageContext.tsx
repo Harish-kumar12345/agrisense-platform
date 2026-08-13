@@ -593,51 +593,25 @@ const translations = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-  const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('agrisense-language');
-    return (saved as Language) || 'en';
-  });
+  const language: Language = 'en';
+  const setLanguage = () => {};
 
   const t = (key: string): string => {
-    return translations[language][key] || translations.en[key] || key;
+    return translations.en[key as keyof typeof translations.en] || key;
   };
 
   const speak = (text: string) => {
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      
-      if (language === 'ml') {
-        // Try to find Malayalam voice
-        const voices = window.speechSynthesis.getVoices();
-        const malayalamVoice = voices.find(voice => 
-          voice.lang.includes('ml') || 
-          voice.name.toLowerCase().includes('malayalam') ||
-          voice.name.toLowerCase().includes('indian') ||
-          voice.lang.includes('hi-IN') // Hindi as fallback for Indian languages
-        );
-        
-        if (malayalamVoice) {
-          utterance.voice = malayalamVoice;
-        }
-        utterance.lang = 'ml-IN';
-        utterance.rate = 0.7;
-        utterance.pitch = 1.1;
-      } else {
-        utterance.lang = 'en-US';
-        utterance.rate = 1;
-        utterance.pitch = 1;
-      }
-      
+      utterance.lang = 'en-US';
+      utterance.rate = 1;
+      utterance.pitch = 1;
       window.speechSynthesis.speak(utterance);
     } catch (error) {
       console.error('Text-to-speech error:', error);
     }
   };
-
-  useEffect(() => {
-    localStorage.setItem('agrisense-language', language);
-  }, [language]);
 
   const value = {
     language,

@@ -110,7 +110,7 @@ export const Chat = () => {
     }
     if (!recognitionRef.current) {
       recognitionRef.current = new SpeechRecognitionCtor();
-      recognitionRef.current.lang = language === 'ml' ? 'ml-IN' : 'en-US';
+      recognitionRef.current.lang = 'en-US';
       recognitionRef.current.interimResults = false;
       recognitionRef.current.maxAlternatives = 1;
       recognitionRef.current.onresult = (event: any) => {
@@ -119,8 +119,7 @@ export const Chat = () => {
       };
       recognitionRef.current.onend = () => setListening(false);
     } else {
-      // Update language when it changes
-      recognitionRef.current.lang = language === 'ml' ? 'ml-IN' : 'en-US';
+      recognitionRef.current.lang = 'en-US';
     }
     if (!listening) {
       setListening(true);
@@ -336,7 +335,7 @@ export const Chat = () => {
                       transition={{ delay: 0.8 }}
                       className="flex flex-wrap justify-center gap-2 mt-6 max-w-md"
                     >
-                      {['🎤 Voice Chat', '🌍 Multi-language', '📊 Smart Analysis', '💡 Expert Tips'].map((feature, index) => (
+                      {['🎤 Voice Chat', '🤖 AI-Powered', '📊 Smart Analysis', '💡 Expert Tips'].map((feature, index) => (
                         <motion.div
                           key={feature}
                           initial={{ opacity: 0, scale: 0 }}

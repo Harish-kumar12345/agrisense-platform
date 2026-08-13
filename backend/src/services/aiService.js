@@ -9,29 +9,6 @@ const path = require('path');
 // Load .env file from the backend directory
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-// Malayalam language detection and translation utilities
-function isMalayalam(text = '') {
-  return /[\u0D00-\u0D7F]/.test(text);
-}
-
-async function translateToMalayalam(text) {
-  if (!model) return text;
-  
-  try {
-    const prompt = `Translate the following text to Malayalam. Only provide the Malayalam translation, no explanations or additional text:
-
-"${text}"`;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const translatedText = response.text().trim();
-    
-    return translatedText || text;
-  } catch (error) {
-    console.error('❌ Translation to Malayalam failed:', error);
-    return text;
-  }
-}
 
 // Initialize Gemini AI with your API key
 let genAI = null;
@@ -173,16 +150,6 @@ async function getFallbackResponse(text, language = 'en') {
     response = "🌾 Thank you for your agricultural question! Follow good agricultural practices, consult your local Krishi Vigyan Kendra (KVK), and use modern farming techniques for better yields. Feel free to ask again!";
   }
   
-  // Translate to Malayalam if requested
-  if (language === 'ml') {
-    try {
-      response = await translateToMalayalam(response);
-    } catch (error) {
-      console.error('❌ Fallback translation failed:', error);
-      response = "ക്ഷമിക്കണം, ഇപ്പോൾ വിശദമായ മറുപടി നൽകാൻ കഴിഞ്ഞില്ല. കൃഷി സംബന്ധിയായ സഹായത്തിന് പ്രാദേശിക കൃഷി ഓഫീസറെ സമീപിക്കുക.";
-    }
-  }
-  
   return response;
 }
 
@@ -207,25 +174,19 @@ async function testAI(query = "What crops are good for monsoon season?") {
 }
 
 // Simple AI response for real-time chat (no database)
-async function generateChatResponse(text, options = {}) {
+async function generateChatResponse(text) {
   try {
-    const language = typeof options === 'string' ? options : (options?.language || 'en');
-    console.log(`🤖 Generating chat response for: ${text.substring(0, 50)}... (Language: ${language})`);
+    console.log(`🤖 Generating chat response for: ${text.substring(0, 50)}...`);
     
     const context = await retrieveContext(text);
     
-    // Create language-specific prompt
-    const basePrompt = `You are Krishi Mitra, an expert agricultural assistant helping Indian farmers. Provide practical, actionable advice in simple language. Keep responses helpful but concise (2-3 sentences max).
+    const prompt = `You are Krishi Mitra, an expert agricultural assistant helping Indian farmers. Provide practical, actionable advice in simple language. Keep responses helpful but concise (2-3 sentences max).
 
 Context: ${context || 'None'}
 
 Farmer's Question: ${text}
 
-Provide helpful agricultural guidance`;
-    
-    const prompt = language === 'ml' 
-      ? `${basePrompt}. IMPORTANT: Reply ONLY in Malayalam language. Use Malayalam script (മലയാളം).`
-      : `${basePrompt}:`;
+Provide helpful agricultural guidance:`;
 
     let answer = '';
     if (model) {
@@ -236,42 +197,34 @@ Provide helpful agricultural guidance`;
           return response.text();
         });
         
-        // If Malayalam was requested but response is in English, translate it
-        if (language === 'ml' && answer && !isMalayalam(answer)) {
-          console.log('🔄 Response not in Malayalam, translating...');
-          answer = await translateToMalayalam(answer);
-        }
-        
         console.log('✅ Chat response generated successfully');
       } catch (genErr) {
         console.error('❌ AI Generation Error after retries:', genErr);
-        answer = await getFallbackResponse(text, language);
+        answer = await getFallbackResponse(text);
       }
     } else {
       console.log('⚠️ Gemini API not configured - using fallback');
-      answer = await getFallbackResponse(text, language);
+      answer = await getFallbackResponse(text);
     }
 
     if (!answer) {
-      answer = await getFallbackResponse(text, language);
+      answer = await getFallbackResponse(text);
     }
     
     return answer;
   } catch (err) {
     console.error('❌ Error in generateChatResponse:', err);
-    const language = typeof options === 'string' ? options : (options?.language || 'en');
-    return await getFallbackResponse(text, language);
+    return await getFallbackResponse(text);
   }
 }
 
 // Generate treatment recommendations for plant diseases
-async function generateDiseaseRecommendation(diseaseData, language = 'en') {
+async function generateDiseaseRecommendation(diseaseData) {
   try {
-    console.log(`🩺 Generating treatment recommendation for: ${diseaseData.primaryDisease?.disease} (${language})`);
+    console.log(`🩺 Generating treatment recommendation for: ${diseaseData.primaryDisease?.disease}`);
     
     const { primaryDisease, predictions } = diseaseData;
     
-    // Create language-specific prompt
     let prompt = `You are an expert plant pathologist and agricultural advisor. A farmer has uploaded an image of their plant, and our AI analysis has identified:
 
 PRIMARY DISEASE: ${primaryDisease.disease} (${primaryDisease.confidence}% confidence, ${primaryDisease.severity} severity)
@@ -287,12 +240,7 @@ Please provide a well-formatted treatment plan with the following structure:
 🛡️ **PREVENTION STRATEGIES** (avoid future occurrences)
 ⚠️ **WARNING SIGNS** (when to seek expert help)
 
-Make it practical for Indian farmers, especially in Kerala. Use emojis and clear formatting. Focus on cost-effective, locally available solutions. Keep each section concise but actionable.`;
-
-    // Add language instruction for Malayalam
-    if (language === 'ml') {
-      prompt += '\n\nIMPORTANT: Please respond in Malayalam language only. Use Malayalam text throughout the entire response.';
-    }
+Make it practical for Indian farmers. Use emojis and clear formatting. Focus on cost-effective, locally available solutions. Keep each section concise but actionable.`;
 
     let recommendation = '';
     if (model) {
@@ -302,41 +250,29 @@ Make it practical for Indian farmers, especially in Kerala. Use emojis and clear
           const response = await result.response;
           return response.text();
         });
-        console.log(`✅ Disease treatment recommendation generated successfully in ${language}`);
-        
-        // Verify Malayalam response and translate if needed
-        if (language === 'ml' && !isMalayalam(recommendation)) {
-          console.log('⚠️ Gemini responded in English, translating to Malayalam...');
-          try {
-            recommendation = await translateToMalayalam(recommendation);
-          } catch (translateErr) {
-            console.error('❌ Translation failed:', translateErr);
-            recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease, language);
-          }
-        }
-        
+        console.log(`✅ Disease treatment recommendation generated successfully`);
       } catch (genErr) {
         console.error('❌ AI Generation Error for disease recommendation:', genErr);
-        recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease, language);
+        recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease);
       }
     } else {
       console.log('⚠️ Gemini API not configured - using fallback disease recommendation');
-      recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease, language);
+      recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease);
     }
 
     if (!recommendation) {
-      recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease, language);
+      recommendation = await getFallbackDiseaseRecommendation(primaryDisease.disease);
     }
     
     return recommendation;
   } catch (err) {
     console.error('❌ Error in generateDiseaseRecommendation:', err);
-    return await getFallbackDiseaseRecommendation('Unknown Disease', language);
+    return await getFallbackDiseaseRecommendation('Unknown Disease');
   }
 }
 
-async function getFallbackDiseaseRecommendation(diseaseName, language = 'en') {
-  let recommendation = `🩺 **Treatment Plan for ${diseaseName}**
+async function getFallbackDiseaseRecommendation(diseaseName) {
+  return `🩺 **Treatment Plan for ${diseaseName}**
 
 🚨 **IMMEDIATE ACTIONS**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -374,35 +310,9 @@ async function getFallbackDiseaseRecommendation(diseaseName, language = 'en') {
 🔹 Unusual symptoms appear
 
 📞 **Contact**: Your local Krishi Vigyan Kendra (KVK) or agricultural extension officer for region-specific guidance.`;
-
-  // Translate to Malayalam if requested
-  if (language === 'ml') {
-    try {
-      recommendation = await translateToMalayalam(recommendation);
-    } catch (error) {
-      console.error('❌ Fallback disease recommendation translation failed:', error);
-      // Provide a basic Malayalam version if translation fails
-      recommendation = `🩺 **${diseaseName} ചികിത്സാ പദ്ധതി**
-
-🚨 **അടിയന്തര നടപടികൾ**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔹 രോഗബാധിതമായ ഭാഗങ്ങൾ ഉടനെ നീക്കം ചെയ്യുക
-🔹 രോഗബാധിത സസ്യങ്ങളെ ആരോഗ്യമുള്ളവയിൽ നിന്ന് വേർതിരിക്കുക
-🔹 സസ്യങ്ങൾക്ക് ചുറ്റും വായു സഞ്ചാരം മെച്ചപ്പെടുത്തുക
-
-🌿 **ജൈവ ചികിത്സ**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔹 വേപ്പെണ്ണ സ്പ്രേ ഉപയോഗിക്കുക
-🔹 മഞ്ഞൾ പേസ്റ്റ് പ്രയോഗിക്കുക
-🔹 കമ്പോസ്റ്റ് ടീ ഉപയോഗിക്കുക
-
-📞 **സഹായത്തിനായി പ്രാദേശിക കൃഷി വിദഗ്ധനെ സമീപിക്കുക**`;
-    }
-  }
-
-  return recommendation;
 }
 
-module.exports = { generateAIResponse, generateChatResponse, testAI, generateDiseaseRecommendation, translateToMalayalam };
+module.exports = { generateAIResponse, generateChatResponse, testAI, generateDiseaseRecommendation };
+
 
 

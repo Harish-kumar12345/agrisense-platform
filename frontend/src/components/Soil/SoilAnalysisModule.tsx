@@ -38,8 +38,10 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
   location,
   crop = 'Rice'
 }) => {
-  const lat = farm?.latitude || location?.latitude || 28.6692;
-  const lon = farm?.longitude || location?.longitude || 77.4538;
+  const rawLat = farm?.latitude ?? location?.latitude ?? 28.6692;
+  const rawLon = farm?.longitude ?? location?.longitude ?? 77.4538;
+  const safeLat = isNaN(Number(rawLat)) ? 28.6692 : Number(rawLat);
+  const safeLon = isNaN(Number(rawLon)) ? 77.4538 : Number(rawLon);
   const farmId = farm?.farm_id || 'default_farm';
   const selectedCrop = farm?.crop || crop || 'Rice';
   const farmTitle = farm?.farm_name || 'AgriSense Farm Field';
@@ -47,6 +49,7 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
 
   const [analysis, setAnalysis] = useState<ComprehensiveSoilAnalysis | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
   const [showEditForm, setShowEditForm] = useState<boolean>(false);
 
   // Form states
@@ -61,20 +64,24 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
 
   const loadSoil = async () => {
     setLoading(true);
+    setError('');
     try {
-      const data = await soilService.getSoilAnalysis(lat, lon, farmId, selectedCrop);
+      const data = await soilService.getSoilAnalysis(safeLat, safeLon, farmId, selectedCrop);
       setAnalysis(data);
 
       // Populate form defaults
-      setInputN(data.soilData.nitrogen);
-      setInputP(data.soilData.phosphorus);
-      setInputK(data.soilData.potassium);
-      setInputPh(data.soilData.ph);
-      setInputMoisture(data.soilData.moisture);
-      setInputOrganic(data.soilData.organic_matter);
-      setInputSoilType(data.soilData.type);
-    } catch (err) {
+      if (data && data.soilData) {
+        setInputN(data.soilData.nitrogen || 70);
+        setInputP(data.soilData.phosphorus || 50);
+        setInputK(data.soilData.potassium || 80);
+        setInputPh(data.soilData.ph || 6.5);
+        setInputMoisture(data.soilData.moisture || 35);
+        setInputOrganic(data.soilData.organic_matter || 1.8);
+        setInputSoilType(data.soilData.type || 'Clay Loam');
+      }
+    } catch (err: any) {
       console.error('Soil load error:', err);
+      setError(err?.message || 'Failed to load soil analysis data.');
     } finally {
       setLoading(false);
     }
@@ -82,7 +89,7 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
 
   useEffect(() => {
     loadSoil();
-  }, [lat, lon, farmId, selectedCrop]);
+  }, [safeLat, safeLon, farmId, selectedCrop]);
 
   const handleSaveLabTest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,12 +123,28 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
       <div className="max-w-6xl mx-auto px-4 py-12 text-center space-y-4">
         <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
         <h3 className="text-lg font-semibold text-gray-800">Analyzing Soil Parameters...</h3>
-        <p className="text-xs text-gray-500">Querying geospatial soil telemetry & lab data at Lat {lat.toFixed(4)}, Lon {lon.toFixed(4)}</p>
+        <p className="text-xs text-gray-500">Querying geospatial soil telemetry & lab data at Lat {safeLat.toFixed(4)}, Lon {safeLon.toFixed(4)}</p>
       </div>
     );
   }
 
-  if (!analysis) return null;
+  if (error || !analysis) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center space-y-3">
+          <AlertTriangle className="w-10 h-10 text-rose-600 mx-auto" />
+          <h3 className="text-base font-bold text-rose-800">Soil Analysis Error</h3>
+          <p className="text-xs text-rose-700">{error || 'Unable to load soil analysis data.'}</p>
+          <button
+            onClick={loadSoil}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition-all shadow-sm"
+          >
+            <RefreshCw className="w-4 h-4" /> Retry Analysis
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const { soilData, healthScore, suitabilityRating, suitabilityStatus, nutrientStatus, recommendations, mlImpacts } = analysis;
 
@@ -149,7 +172,7 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
             <div className="flex flex-wrap items-center gap-3 text-xs text-emerald-100">
               <span className="flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-emerald-300" />
-                {locationLabel} ({lat.toFixed(4)}, {lon.toFixed(4)})
+                {locationLabel} ({safeLat.toFixed(4)}, {safeLon.toFixed(4)})
               </span>
               <span>•</span>
               <span className="flex items-center gap-1 font-semibold text-amber-300">
@@ -172,7 +195,7 @@ export const SoilAnalysisModule: React.FC<SoilAnalysisModuleProps> = ({
             </button>
 
             <button
-              onClick={loadWeather}
+              onClick={loadSoil}
               className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white backdrop-blur-md transition-all border border-white/20 shadow-sm"
               title="Refresh Data"
             >

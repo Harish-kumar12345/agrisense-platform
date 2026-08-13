@@ -5,25 +5,21 @@ import {
   TrendingDown,
   Building2,
   MapPin,
-  Calendar,
   RefreshCw,
-  Award,
-  AlertTriangle,
   Bell,
   BellPlus,
   Plus,
   Trash2,
-  ChevronRight,
   Bot,
-  Info,
   Sparkles,
   Sliders,
-  CheckCircle2,
   X,
-  Layers,
   ArrowUpRight,
   ArrowDownRight,
-  BarChart2
+  BarChart2,
+  Search,
+  Filter,
+  ArrowUpDown
 } from 'lucide-react';
 import {
   cropPriceService,
@@ -55,7 +51,7 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
   location,
   crop = 'Rice'
 }) => {
-  // Extract farm parameters
+  // Extract farm parameters safely
   const rawLat = farm?.latitude ?? location?.latitude ?? 28.6692;
   const rawLon = farm?.longitude ?? location?.longitude ?? 77.4538;
   const safeLat = isNaN(Number(rawLat)) ? 28.6692 : Number(rawLat);
@@ -67,14 +63,17 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
   const userState = farm?.location_name ? 'Kerala' : (location?.state || 'Kerala');
   const userDistrict = location?.city || 'Ernakulam';
 
-  // Active View Tab: 'prices' | 'revenue' | 'history' | 'compare' | 'alerts'
-  const [activeTab, setActiveTab] = useState<'prices' | 'revenue' | 'history' | 'compare' | 'alerts'>('prices');
+  // Navigation segment
+  const [activeSegment, setActiveSegment] = useState<'prices' | 'compare' | 'history' | 'revenue' | 'alerts'>('prices');
+
+  // Search & Filter state for prices table
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Loading & Error States
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  // Data States
+  // Core Data States
   const [pricesList, setPricesList] = useState<CropPriceRecord[]>([]);
   const [currentCropRecord, setCurrentCropRecord] = useState<CropPriceRecord | null>(null);
   const [mandiComparisons, setMandiComparisons] = useState<MandiComparison[]>([]);
@@ -83,7 +82,7 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
   const [revenueEstimate, setRevenueEstimate] = useState<RevenueEstimate | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  // Interactive Revenue Scenario Slider State
+  // Price Sensitivity Slider
   const [customPriceScenario, setCustomPriceScenario] = useState<number>(0);
 
   // Price Alerts State
@@ -92,16 +91,15 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
   const [alertTargetPrice, setAlertTargetPrice] = useState<number>(3200);
   const [alertCondition, setAlertCondition] = useState<'above' | 'below'>('above');
 
-  // AI Advisor Consultation Modal State
-  const [isAiAdvisorOpen, setIsAiAdvisorOpen] = useState<boolean>(false);
+  // Strategy Modal State
+  const [isStrategyDrawerOpen, setIsStrategyDrawerOpen] = useState<boolean>(false);
 
-  // Fetch telemetry, AI predictions, and real crop market prices
+  // Load all telemetry & API data
   const loadMarketData = async () => {
     setLoading(true);
     setError('');
 
     try {
-      // 1. Parallel fetch of soil, weather, AI yield prediction, crop prices, mandi comparisons & price history
       const [soilRes, weatherRes, pricesRes, mandis, history] = await Promise.all([
         soilService.getSoilAnalysis(safeLat, safeLon, farm?.farm_id || 'default_farm', selectedCrop),
         weatherService.getLiveWeatherData(safeLat, safeLon, selectedCrop),
@@ -115,12 +113,10 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
       setMandiComparisons(mandis);
       setPriceHistory(history);
 
-      // Find matching crop record or top match
       const matched = pricesRes.prices.find(p => p.crop.toLowerCase() === selectedCrop.toLowerCase()) || pricesRes.prices[0];
       setCurrentCropRecord(matched);
       setCustomPriceScenario(matched ? matched.modalPrice : 3000);
 
-      // 2. Compute AI Yield Prediction to get estimated production tonnage
       const soil = soilRes.soilData;
       const weather = weatherRes.current;
 
@@ -142,7 +138,6 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
       const yResult = await yieldService.predictYield(featurePayload);
       setYieldResult(yResult);
 
-      // 3. Compute Estimated Harvest Revenue: Tonnage × Market Price
       const revenue = cropPriceService.calculateRevenue(
         selectedCrop,
         yResult.totalProductionTons,
@@ -150,11 +145,10 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
       );
       setRevenueEstimate(revenue);
 
-      // 4. Load saved price alerts
       setAlerts(cropPriceService.getPriceAlerts());
 
     } catch (err: any) {
-      console.error('Error loading crop market price telemetry:', err);
+      console.error('Error loading market data:', err);
       setError(err?.message || 'Failed to fetch current crop market prices.');
     } finally {
       setLoading(false);
@@ -165,10 +159,8 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
     loadMarketData();
   }, [safeLat, safeLon, farmArea, selectedCrop]);
 
-  // Recalculate Scenario Revenue when slider moves
   const scenarioRevenue = Number(((yieldResult?.totalProductionTons || 12.0) * 10 * customPriceScenario).toFixed(0));
 
-  // Save new Price Alert
   const handleSaveAlert = (e: React.FormEvent) => {
     e.preventDefault();
     const alert = cropPriceService.savePriceAlert(selectedCrop, alertTargetPrice, alertCondition);
@@ -176,571 +168,494 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
     setIsAlertModalOpen(false);
   };
 
-  // Delete Price Alert
   const handleDeleteAlert = (alertId: string) => {
     cropPriceService.deletePriceAlert(alertId);
     setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
+  const filteredPrices = pricesList.filter(item =>
+    item.crop.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.market.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center space-y-4">
-        <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
-        <h3 className="text-lg font-bold text-gray-800">Fetching Live Mandi Prices & Revenue Telemetry...</h3>
-        <p className="text-xs text-gray-500">Connecting GIS plot ({farmArea} ha), Agmarknet mandi rates, and AI Yield predictions</p>
+      <div className="max-w-6xl mx-auto px-4 py-20 text-center space-y-3">
+        <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs font-semibold text-slate-500">Loading market prices...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-      {/* Top Banner Header */}
-      <div className="bg-gradient-to-r from-emerald-950 via-stone-900 to-teal-950 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-200 text-xs font-bold backdrop-blur-md">
-              <IndianRupee className="w-4 h-4 text-emerald-400" /> Mandi Price Intelligence & Estimated Revenue
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
-              {farmName} — <span className="text-emerald-400">{selectedCrop} Market Rates</span>
-            </h2>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-emerald-100/90 font-medium">
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-emerald-300" />
-                {locationLabel}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1 font-bold text-amber-300">
-                <Building2 className="w-3.5 h-3.5" /> Mandi: {currentCropRecord?.market || 'Local APMC'}
-              </span>
-              <span>•</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white font-bold text-[11px]">
-                Plot Area: {farmArea} Hectares
-              </span>
-            </div>
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 text-slate-800 font-sans">
+      
+      {/* 1. Page Header (Clean Product Style) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Market Prices & Revenue</h1>
+            <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
+              {selectedCrop}
+            </span>
           </div>
+          <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+            <span>{farmName}</span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              {locationLabel} ({farmArea} ha)
+            </span>
+          </p>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              onClick={() => setIsAiAdvisorOpen(true)}
-              className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Bot className="w-4 h-4 text-emerald-200" /> AI Market Strategy
-            </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsStrategyDrawerOpen(true)}
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Selling Strategy</span>
+          </button>
 
-            <button
-              onClick={() => setIsAlertModalOpen(true)}
-              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-xl font-bold shadow-md transition-all flex items-center gap-1.5 text-xs"
-            >
-              <BellPlus className="w-4 h-4" /> Set Price Alert
-            </button>
+          <button
+            type="button"
+            onClick={() => setIsAlertModalOpen(true)}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+          >
+            <BellPlus className="w-3.5 h-3.5" />
+            <span>Set Price Alert</span>
+          </button>
 
-            <button
-              onClick={loadMarketData}
-              className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white backdrop-blur-md transition-all border border-white/20 shadow-sm"
-              title="Refresh Mandi Prices"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={loadMarketData}
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200"
+            title="Refresh prices"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-2">
-        <button
-          onClick={() => setActiveTab('prices')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'prices'
-              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <IndianRupee className="w-4 h-4 text-emerald-700" /> 💰 Current Mandi Prices
-        </button>
+      {/* 2. Compact Primary Data Bar (No Colored Cards Grid) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+        <div className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">Current Mandi Rate</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900">₹{(currentCropRecord?.modalPrice || 3000).toLocaleString('en-IN')}</span>
+            <span className="text-xs font-semibold text-emerald-600 flex items-center">
+              <ArrowUpRight className="w-3.5 h-3.5" /> +1.8%
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500">Mandi: {currentCropRecord?.market || 'Local APMC'}</span>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('revenue')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'revenue'
-              ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Award className="w-4 h-4 text-amber-700" /> 📈 Revenue Calculator
-        </button>
+        <div className="space-y-1 pt-3 md:pt-0 md:pl-4">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">Price Range (Min – Max)</span>
+          <div className="text-lg font-bold text-slate-800">
+            ₹{(currentCropRecord?.minPrice || 2800).toLocaleString('en-IN')} – ₹{(currentCropRecord?.maxPrice || 3200).toLocaleString('en-IN')}
+          </div>
+          <span className="text-[11px] text-slate-500">per Quintal</span>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('compare')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'compare'
-              ? 'bg-blue-100 text-blue-900 border border-blue-300 shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Building2 className="w-4 h-4 text-blue-700" /> 🏬 Compare Mandis ({mandiComparisons.length})
-        </button>
+        <div className="space-y-1 pt-3 md:pt-0 md:pl-4">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">Expected Harvest Output</span>
+          <div className="text-lg font-bold text-slate-800">
+            {yieldResult?.totalProductionTons || 12.0} Tons
+          </div>
+          <span className="text-[11px] text-slate-500">From {farmArea} ha plot area</span>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'history'
-              ? 'bg-purple-100 text-purple-900 border border-purple-300 shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <BarChart2 className="w-4 h-4 text-purple-700" /> 📊 30-Day Price Trend
-        </button>
-
-        <button
-          onClick={() => setActiveTab('alerts')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'alerts'
-              ? 'bg-teal-100 text-teal-900 border border-teal-300 shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Bell className="w-4 h-4 text-teal-700" /> 🔔 Price Alerts ({alerts.length})
-        </button>
+        <div className="space-y-1 pt-3 md:pt-0 md:pl-4">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">Estimated Revenue</span>
+          <div className="text-2xl font-bold text-emerald-700">
+            ₹{(revenueEstimate?.totalRevenueLakhs || 3.6).toFixed(2)} Lakhs
+          </div>
+          <span className="text-[11px] text-slate-500">Gross estimated harvest value</span>
+        </div>
       </div>
 
-      {/* Error alert if any */}
+      {/* 3. Segmented Navigation Controls */}
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setActiveSegment('prices')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSegment === 'prices'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Market Prices ({pricesList.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSegment('compare')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSegment === 'compare'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Mandi Comparison
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSegment('history')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSegment === 'history'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Price History
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSegment('revenue')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSegment === 'revenue'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Revenue Simulator
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSegment('alerts')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeSegment === 'alerts'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Price Alerts ({alerts.length})
+          </button>
+        </div>
+
+        {activeSegment === 'prices' && (
+          <div className="relative w-48 hidden sm:block">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search commodity..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+        )}
+      </div>
+
       {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-800 flex items-center justify-between">
-          <span>⚠️ {error}</span>
-          <button onClick={loadMarketData} className="px-3 py-1 bg-rose-600 text-white rounded-lg font-bold">Retry</button>
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+          <span>{error}</span>
+          <button type="button" onClick={loadMarketData} className="font-bold underline">Retry</button>
         </div>
       )}
 
-      {/* TAB 1: CURRENT MANDI PRICES */}
-      {activeTab === 'prices' && (
-        <div className="space-y-6">
-          {/* Main Price & Revenue Highlight Card */}
-          <div className="bg-white rounded-3xl p-6 border border-emerald-100 shadow-lg space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-              <div>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Live Mandi Market Telemetry</span>
-                <h3 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
-                  {currentCropRecord?.crop} — <span className="text-emerald-700">{currentCropRecord?.market}</span>
-                </h3>
-              </div>
-
-              {/* Trend Badge */}
-              <div className="flex items-center gap-3">
-                <span className={`px-3.5 py-1.5 rounded-2xl text-xs font-extrabold flex items-center gap-1.5 ${
-                  currentCropRecord?.trend === 'up'
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : currentCropRecord?.trend === 'down'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                    : 'bg-gray-100 text-gray-800 border border-gray-300'
-                }`}>
-                  {currentCropRecord?.trend === 'up' ? <ArrowUpRight className="w-4 h-4 text-emerald-600" /> : <ArrowDownRight className="w-4 h-4 text-rose-600" />}
-                  Trend: {currentCropRecord?.changePercent ? `${currentCropRecord.changePercent > 0 ? '+' : ''}${currentCropRecord.changePercent}%` : '+1.8%'}
-                </span>
-              </div>
-            </div>
-
-            {/* 4 Core Market Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* 1. Modal / Typical Price */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/60 border border-emerald-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Modal / Typical Rate</span>
-                  <IndianRupee className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div className="text-3xl font-black text-emerald-950 py-1">
-                  ₹{(currentCropRecord?.modalPrice || 3000).toLocaleString('en-IN')}
-                </div>
-                <span className="text-xs font-bold text-emerald-700">per {currentCropRecord?.unit || 'Quintal'}</span>
-              </div>
-
-              {/* 2. Minimum Price */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/60 border border-blue-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Minimum Mandi Rate</span>
-                  <TrendingDown className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="text-3xl font-black text-blue-950 py-1">
-                  ₹{(currentCropRecord?.minPrice || 2800).toLocaleString('en-IN')}
-                </div>
-                <span className="text-xs font-semibold text-blue-700">per {currentCropRecord?.unit || 'Quintal'}</span>
-              </div>
-
-              {/* 3. Maximum Price */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/60 border border-amber-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Maximum Mandi Rate</span>
-                  <TrendingUp className="w-5 h-5 text-amber-600" />
-                </div>
-                <div className="text-3xl font-black text-amber-950 py-1">
-                  ₹{(currentCropRecord?.maxPrice || 3200).toLocaleString('en-IN')}
-                </div>
-                <span className="text-xs font-semibold text-amber-700">per {currentCropRecord?.unit || 'Quintal'}</span>
-              </div>
-
-              {/* 4. Estimated Total Revenue */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50/60 border border-purple-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Estimated Revenue</span>
-                  <Award className="w-5 h-5 text-purple-600" />
-                </div>
-                <div className="text-2xl font-black text-purple-950 py-1">
-                  ₹{(revenueEstimate?.totalRevenueRs || 360000).toLocaleString('en-IN')}
-                </div>
-                <span className="text-xs font-bold text-purple-700">
-                  {revenueEstimate?.totalRevenueLakhs || 3.6} Lakhs ({yieldResult?.totalProductionTons || 12.0} Tons)
-                </span>
-              </div>
-            </div>
-
-            {/* Smart Market Insight Banner */}
-            <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 text-emerald-950 font-medium">
-                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>
-                  <strong>Market Price Insight:</strong> {revenueEstimate?.insightSummary || `Current price for ${selectedCrop} is +2.25% higher than the recent 30-day average.`}
-                </span>
-              </div>
-              <span className="text-[11px] font-bold text-emerald-900 bg-emerald-200/80 px-3 py-1 rounded-full shrink-0">
-                ✓ Live Agmarknet Telemetry
-              </span>
-            </div>
-          </div>
-
-          {/* Other Commodities Price Grid */}
-          <div className="bg-white rounded-3xl p-6 border border-emerald-100 shadow-lg space-y-4">
-            <h3 className="font-extrabold text-gray-800 text-base flex items-center gap-2 pb-3 border-b border-gray-100">
-              <Building2 className="w-5 h-5 text-emerald-600" /> Regional Agricultural Mandi Rates ({pricesList.length} Commodities)
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pricesList.map((item, index) => (
-                <div key={index} className="p-4 rounded-2xl bg-gray-50 hover:bg-emerald-50/40 border border-gray-200 transition-all space-y-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-gray-900 text-sm">{item.crop}</h4>
-                      {item.cropLocal && <span className="text-xs text-gray-500">{item.cropLocal}</span>}
-                      <p className="text-[11px] font-medium text-emerald-700 pt-0.5">{item.market}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 ${
-                      item.trend === 'up' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {item.trend === 'up' ? '↗' : '↘'} {item.changePercent ? `${item.changePercent > 0 ? '+' : ''}${item.changePercent}%` : '+1.5%'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-baseline justify-between pt-1">
-                    <span className="text-xl font-black text-gray-900">₹{item.modalPrice.toLocaleString('en-IN')}</span>
-                    <span className="text-xs text-gray-500 font-semibold">per {item.unit}</span>
-                  </div>
-
-                  <div className="text-[11px] text-gray-500 flex justify-between pt-2 border-t border-gray-200">
-                    <span>Range: ₹{item.minPrice} - ₹{item.maxPrice}</span>
-                    <span className="italic">{item.remarks || 'Normal trading'}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: REVENUE CALCULATOR */}
-      {activeTab === 'revenue' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-amber-100 shadow-lg space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-              <div>
-                <h3 className="text-lg font-extrabold text-gray-800 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-600" /> Automated Revenue Estimation Engine
-                </h3>
-                <p className="text-xs text-gray-500">Calculates revenue from AI Yield Predicted Tonnage × Current Mandi Rates</p>
-              </div>
-
-              <div className="px-4 py-2 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-extrabold text-amber-900">
-                Formula: Production (Tons) × Market Rate (₹/Ton)
-              </div>
-            </div>
-
-            {/* Core Revenue Numbers */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50/70 border border-amber-200 rounded-2xl space-y-1">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Predicted Harvest Output</span>
-                <div className="text-3xl font-black text-amber-950">{yieldResult?.totalProductionTons || 12.0} Tons</div>
-                <p className="text-xs text-amber-800 font-medium">From {farmArea} hectares plot area ({yieldResult?.predictedYieldPerHectare || 4.8} t/ha)</p>
-              </div>
-
-              <div className="p-5 bg-gradient-to-br from-emerald-50 to-teal-50/70 border border-emerald-200 rounded-2xl space-y-1">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Current Market Price</span>
-                <div className="text-3xl font-black text-emerald-950">₹{(currentCropRecord?.modalPrice || 3000).toLocaleString('en-IN')}</div>
-                <p className="text-xs text-emerald-800 font-medium">per Quintal (₹{((currentCropRecord?.modalPrice || 3000) * 10).toLocaleString('en-IN')} / Ton)</p>
-              </div>
-
-              <div className="p-5 bg-gradient-to-br from-purple-50 to-pink-50/70 border border-purple-200 rounded-2xl space-y-1">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Expected Revenue</span>
-                <div className="text-3xl font-black text-purple-950">₹{(revenueEstimate?.totalRevenueRs || 360000).toLocaleString('en-IN')}</div>
-                <p className="text-xs text-purple-800 font-bold">~{revenueEstimate?.totalRevenueLakhs || 3.60} Lakhs Total Gross Revenue</p>
-              </div>
-            </div>
-
-            {/* Price Sensitivity Scenario Testing Slider */}
-            <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="font-extrabold text-gray-800 text-sm flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-amber-600" /> Price Sensitivity Scenario Simulator
-                  </h4>
-                  <p className="text-xs text-gray-500">Test expected revenue if market prices fluctuate near harvest date</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-gray-500 font-semibold block">Simulated Price Rate:</span>
-                  <span className="text-xl font-black text-amber-900">₹{customPriceScenario.toLocaleString('en-IN')} / Quintal</span>
-                </div>
-              </div>
-
-              <input
-                type="range"
-                min={Math.round((currentCropRecord?.modalPrice || 3000) * 0.7)}
-                max={Math.round((currentCropRecord?.modalPrice || 3000) * 1.4)}
-                step={50}
-                value={customPriceScenario}
-                onChange={(e) => setCustomPriceScenario(Number(e.target.value))}
-                className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-
-              <div className="flex justify-between text-xs text-gray-500 font-bold">
-                <span>Lower Price (₹{Math.round((currentCropRecord?.modalPrice || 3000) * 0.7)})</span>
-                <span>Current Rate (₹{currentCropRecord?.modalPrice || 3000})</span>
-                <span>Higher Price (₹{Math.round((currentCropRecord?.modalPrice || 3000) * 1.4)})</span>
-              </div>
-
-              <div className="p-4 bg-white rounded-xl border border-amber-200 flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-700">Simulated Total Revenue at ₹{customPriceScenario}/qtl:</span>
-                <span className="text-2xl font-black text-emerald-950">₹{scenarioRevenue.toLocaleString('en-IN')} ({(scenarioRevenue / 100000).toFixed(2)} Lakhs)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: COMPARE MANDIS */}
-      {activeTab === 'compare' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-blue-100 shadow-lg space-y-4">
-            <h3 className="text-base font-extrabold text-gray-800 flex items-center gap-2 pb-3 border-b border-gray-100">
-              <Building2 className="w-5 h-5 text-blue-600" /> Mandi Price Comparison Across Nearby Regional Trade Hubs
-            </h3>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200">
-                    <th className="p-3">Mandi / Market Hub</th>
-                    <th className="p-3">Distance</th>
-                    <th className="p-3">Modal Rate (₹/qtl)</th>
-                    <th className="p-3">Price Range (Min - Max)</th>
-                    <th className="p-3">Daily Arrivals</th>
-                    <th className="p-3">Trend</th>
-                    <th className="p-3">Action</th>
+      {/* SEGMENT 1: MARKET PRICES TABLE */}
+      {activeSegment === 'prices' && (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm space-y-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                  <th className="py-3 px-4">Commodity</th>
+                  <th className="py-3 px-4">Market / Mandi</th>
+                  <th className="py-3 px-4 text-right">Modal Price (₹/qtl)</th>
+                  <th className="py-3 px-4 text-right">Price Range</th>
+                  <th className="py-3 px-4 text-center">30-Day Trend</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredPrices.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-slate-900">
+                      <div>
+                        {item.crop}
+                        {item.cropLocal && <span className="text-slate-400 text-[11px] font-normal block">{item.cropLocal}</span>}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">{item.market}</td>
+                    <td className="py-3 px-4 text-right font-bold text-slate-900 text-sm">
+                      ₹{item.modalPrice.toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">
+                      ₹{item.minPrice} – ₹{item.maxPrice}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                        item.trend === 'up' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {item.trend === 'up' ? '↑ +1.8%' : '→ Stable'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentCropRecord(item);
+                          setCustomPriceScenario(item.modalPrice);
+                        }}
+                        className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 font-semibold rounded-lg transition-colors border border-slate-200"
+                      >
+                        Select
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 font-medium">
-                  {mandiComparisons.map((mandi, idx) => (
-                    <tr key={idx} className="hover:bg-blue-50/40">
-                      <td className="p-3 font-extrabold text-gray-900 flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-blue-600" /> {mandi.mandiName}
-                      </td>
-                      <td className="p-3 text-gray-600">{mandi.distanceKm} km away</td>
-                      <td className="p-3 font-black text-emerald-900 text-sm">₹{mandi.modalPrice.toLocaleString('en-IN')}</td>
-                      <td className="p-3 text-gray-600">₹{mandi.minPrice} - ₹{mandi.maxPrice}</td>
-                      <td className="p-3 text-gray-700 font-bold">{mandi.arrivalTons} Tons</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          mandi.trend === 'up' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {mandi.trend === 'up' ? '↗ Rising' : '→ Stable'}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <button
-                          onClick={() => {
-                            if (currentCropRecord) {
-                              setCurrentCropRecord({ ...currentCropRecord, market: mandi.mandiName, modalPrice: mandi.modalPrice });
-                              setActiveTab('prices');
-                            }
-                          }}
-                          className="px-2.5 py-1 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
-                        >
-                          Select Mandi
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* TAB 4: 30-DAY PRICE TREND */}
-      {activeTab === 'history' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-purple-100 shadow-lg space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="text-base font-extrabold text-gray-800 flex items-center gap-2">
-                <BarChart2 className="w-5 h-5 text-purple-600" /> 30-Day Historical Mandi Price Trend ({selectedCrop})
-              </h3>
-              <span className="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
-                Daily Market Trajectory
-              </span>
+      {/* SEGMENT 2: MANDI COMPARISON TABLE */}
+      {activeSegment === 'compare' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Nearby Mandi Comparison for {selectedCrop}</h3>
+              <p className="text-xs text-slate-500">Comparing prices across trade hubs near {locationLabel}</p>
             </div>
+          </div>
 
-            {/* Custom SVG Price Trend Line Chart */}
-            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
-              <div className="h-48 flex items-end justify-between gap-1 pt-6 px-2 relative border-b border-gray-300">
-                {priceHistory.map((point, i) => {
-                  const maxP = Math.max(...priceHistory.map(p => p.price));
-                  const minP = Math.min(...priceHistory.map(p => p.price));
-                  const range = Math.max(1, maxP - minP);
-                  const heightPct = Math.min(100, Math.max(15, Math.round(((point.price - minP) / range) * 80 + 20)));
-
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center group relative">
-                      {/* Tooltip */}
-                      <div className="absolute -top-10 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md pointer-events-none transition-opacity z-20 whitespace-nowrap">
-                        {point.date}: ₹{point.price}
-                      </div>
-
-                      <div
-                        className="w-full max-w-[12px] bg-gradient-to-t from-purple-600 to-indigo-500 rounded-t-sm group-hover:from-emerald-500 group-hover:to-teal-400 transition-all shadow-sm"
-                        style={{ height: `${heightPct}%` }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex justify-between text-[11px] text-gray-400 font-bold pt-1 px-1">
-                <span>{priceHistory[0]?.date || '30 days ago'}</span>
-                <span>15 Days Ago</span>
-                <span>Today (Current: ₹{currentCropRecord?.modalPrice || 3000})</span>
-              </div>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                  <th className="py-2.5 px-3">Mandi Name</th>
+                  <th className="py-2.5 px-3">Distance</th>
+                  <th className="py-2.5 px-3 text-right">Modal Rate</th>
+                  <th className="py-2.5 px-3 text-right">Min – Max Range</th>
+                  <th className="py-2.5 px-3 text-right">Arrivals</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {mandiComparisons.map((mandi, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td className="py-3 px-3 font-semibold text-slate-900">{mandi.mandiName}</td>
+                    <td className="py-3 px-3 text-slate-500">{mandi.distanceKm} km away</td>
+                    <td className="py-3 px-3 text-right font-bold text-slate-900">₹{mandi.modalPrice.toLocaleString('en-IN')} / qtl</td>
+                    <td className="py-3 px-3 text-right text-slate-500">₹{mandi.minPrice} – ₹{mandi.maxPrice}</td>
+                    <td className="py-3 px-3 text-right text-slate-600">{mandi.arrivalTons} Tons</td>
+                    <td className="py-3 px-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (currentCropRecord) {
+                            setCurrentCropRecord({ ...currentCropRecord, market: mandi.mandiName, modalPrice: mandi.modalPrice });
+                            setActiveSegment('prices');
+                          }
+                        }}
+                        className="px-2.5 py-1 text-[11px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold rounded-lg transition-colors border border-emerald-200"
+                      >
+                        Use Mandi
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* TAB 5: PRICE ALERTS */}
-      {activeTab === 'alerts' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-teal-100 shadow-lg space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="text-base font-extrabold text-gray-800 flex items-center gap-2">
-                <Bell className="w-5 h-5 text-teal-600" /> Managed Price Threshold Alerts
-              </h3>
-              <button
-                onClick={() => setIsAlertModalOpen(true)}
-                className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-sm inline-flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" /> Add Alert
-              </button>
+      {/* SEGMENT 3: PRICE HISTORY */}
+      {activeSegment === 'history' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">30-Day Price Trajectory</h3>
+              <p className="text-xs text-slate-500">Historical modal rates for {selectedCrop}</p>
             </div>
+            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+              Current: ₹{(currentCropRecord?.modalPrice || 3000).toLocaleString('en-IN')} / qtl
+            </span>
+          </div>
 
-            <div className="space-y-3">
-              {alerts.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 space-y-2">
-                  <Bell className="w-10 h-10 mx-auto text-gray-300" />
-                  <p className="text-xs font-bold text-gray-600">No active price alerts set.</p>
-                </div>
-              ) : (
-                alerts.map((alr) => (
-                  <div key={alr.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-extrabold text-gray-900">{alr.crop}</span>
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full">
-                          Notify when price is {alr.condition} ₹{alr.targetPrice}/qtl
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-500">Created: {new Date(alr.createdAt).toLocaleDateString()}</p>
-                    </div>
+          <div className="h-44 flex items-end justify-between gap-1 pt-6 px-2 border-b border-slate-200">
+            {priceHistory.map((point, i) => {
+              const maxP = Math.max(...priceHistory.map(p => p.price));
+              const minP = Math.min(...priceHistory.map(p => p.price));
+              const range = Math.max(1, maxP - minP);
+              const heightPct = Math.min(100, Math.max(15, Math.round(((point.price - minP) / range) * 80 + 20)));
 
-                    <button
-                      onClick={() => handleDeleteAlert(alr.id)}
-                      className="p-2 text-gray-400 hover:text-rose-600 transition-colors"
-                      title="Delete Alert"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center group relative">
+                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 bg-slate-900 text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow pointer-events-none transition-opacity z-20 whitespace-nowrap">
+                    {point.date}: ₹{point.price}
                   </div>
-                ))
-              )}
+                  <div
+                    className="w-full max-w-[10px] bg-emerald-600 group-hover:bg-emerald-500 rounded-t-sm transition-all"
+                    style={{ height: `${heightPct}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between text-[11px] text-slate-400 font-medium">
+            <span>{priceHistory[0]?.date || '30 days ago'}</span>
+            <span>15 Days Ago</span>
+            <span>Today</span>
+          </div>
+        </div>
+      )}
+
+      {/* SEGMENT 4: REVENUE SIMULATOR */}
+      {activeSegment === 'revenue' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Revenue Forecast & Price Simulator</h3>
+            <p className="text-xs text-slate-500">Adjust target market rates to calculate estimated gross return</p>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-700">Simulated Selling Price:</span>
+              <span className="text-base font-bold text-emerald-700">₹{customPriceScenario.toLocaleString('en-IN')} / Quintal</span>
+            </div>
+
+            <input
+              type="range"
+              min={Math.round((currentCropRecord?.modalPrice || 3000) * 0.7)}
+              max={Math.round((currentCropRecord?.modalPrice || 3000) * 1.4)}
+              step={50}
+              value={customPriceScenario}
+              onChange={(e) => setCustomPriceScenario(Number(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+            />
+
+            <div className="flex justify-between text-[11px] text-slate-400">
+              <span>Min: ₹{Math.round((currentCropRecord?.modalPrice || 3000) * 0.7)}</span>
+              <span>Baseline: ₹{currentCropRecord?.modalPrice || 3000}</span>
+              <span>Max: ₹{Math.round((currentCropRecord?.modalPrice || 3000) * 1.4)}</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl flex items-center justify-between">
+            <div>
+              <span className="text-xs text-slate-500 block">Forecasted Gross Revenue</span>
+              <span className="text-xl font-bold text-slate-900">₹{scenarioRevenue.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-slate-500 block">Output Volume</span>
+              <span className="text-sm font-semibold text-slate-800">{yieldResult?.totalProductionTons || 12.0} Tons</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL FOR ADDING PRICE ALERT */}
+      {/* SEGMENT 5: PRICE ALERTS */}
+      {activeSegment === 'alerts' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Price Alerts</h3>
+              <p className="text-xs text-slate-500">Notifications when market rates reach specific thresholds</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAlertModalOpen(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm inline-flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Alert
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {alerts.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                No active price alerts. Click 'Add Alert' to create one.
+              </div>
+            ) : (
+              alerts.map((alr) => (
+                <div key={alr.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-semibold text-slate-900">{alr.crop}</span> — Notify when price goes {alr.condition} <strong className="text-slate-900">₹{alr.targetPrice}/qtl</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAlert(alr.id)}
+                    className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD PRICE ALERT */}
       {isAlertModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-teal-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="text-base font-extrabold text-gray-800 flex items-center gap-2">
-                <BellPlus className="w-5 h-5 text-teal-600" /> Set Price Threshold Alert
-              </h3>
-              <button onClick={() => setIsAlertModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-700">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Set Price Alert</h3>
+              <button type="button" onClick={() => setIsAlertModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveAlert} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveAlert} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Target Crop</label>
+                <label className="block text-slate-600 font-medium mb-1">Crop</label>
                 <input
                   type="text"
                   disabled
                   value={selectedCrop}
-                  className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-xl font-bold text-gray-700"
+                  className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Trigger Condition</label>
+                <label className="block text-slate-600 font-medium mb-1">Condition</label>
                 <select
                   value={alertCondition}
                   onChange={(e) => setAlertCondition(e.target.value as 'above' | 'below')}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl font-bold focus:ring-2 focus:ring-teal-500 outline-none"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800"
                 >
-                  <option value="above">Price rises ABOVE target rate</option>
-                  <option value="below">Price drops BELOW target rate</option>
+                  <option value="above">Rises ABOVE target price</option>
+                  <option value="below">Drops BELOW target price</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Target Price (₹ per Quintal)</label>
+                <label className="block text-slate-600 font-medium mb-1">Target Price (₹/qtl)</label>
                 <input
                   type="number"
                   required
                   value={alertTargetPrice}
                   onChange={(e) => setAlertTargetPrice(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl font-bold focus:ring-2 focus:ring-teal-500 outline-none text-xs"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 font-semibold"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsAlertModalOpen(false)}
-                  className="px-4 py-2 text-gray-500 font-bold"
+                  className="px-3 py-1.5 text-slate-600 font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-xl shadow-sm"
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-sm"
                 >
                   Save Alert
                 </button>
@@ -750,47 +665,47 @@ export const CropPriceModule: React.FC<CropPriceModuleProps> = ({
         </div>
       )}
 
-      {/* MODAL FOR AI ADVISOR CONSULTATION */}
-      {isAiAdvisorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 border border-emerald-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="text-base font-extrabold text-gray-800 flex items-center gap-2">
-                <Bot className="w-5 h-5 text-emerald-600" /> AgriSense AI Market Selling Strategy
+      {/* STRATEGY MODAL / DRAWER */}
+      {isStrategyDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600" /> Market Selling Recommendations
               </h3>
-              <button onClick={() => setIsAiAdvisorOpen(false)} className="p-1 text-gray-400 hover:text-gray-700">
-                <X className="w-5 h-5" />
+              <button type="button" onClick={() => setIsStrategyDrawerOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 text-xs text-gray-800 space-y-3 leading-relaxed font-medium">
-              <p className="font-bold text-emerald-950">
-                🌾 AI Market Strategy for {selectedCrop} ({currentCropRecord?.market || 'Local APMC'}):
+            <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+              <p>
+                Based on current market rates at <strong>{currentCropRecord?.market || 'Local APMC'}</strong> (₹{currentCropRecord?.modalPrice}/qtl) and your predicted output of <strong>{yieldResult?.totalProductionTons || 12.0} Tons</strong>:
               </p>
-              <ul className="space-y-2 list-disc pl-4">
-                <li>
-                  <strong>Current Price Trajectory:</strong> {currentCropRecord?.crop} is trading at <strong>₹{currentCropRecord?.modalPrice}/quintal</strong> (+{currentCropRecord?.changePercent || 1.8}% trend). Demand in nearby mandis is strong.
-                </li>
-                <li>
-                  <strong>Revenue Optimization:</strong> For your predicted output of <strong>{yieldResult?.totalProductionTons || 12.0} Tons</strong>, staggering sales across 2 batches can capture peak price surges post-harvest.
-                </li>
-                <li>
-                  <strong>Storage vs. Immediate Sale:</strong> Current market spread indicates holding grain in dry warehouse storage for 30-45 days could fetch +5% to +8% higher price per quintal.
-                </li>
-              </ul>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="font-semibold text-slate-900">Key Recommendations:</div>
+                <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                  <li>Current market prices are +1.8% above the 30-day average.</li>
+                  <li>Staggering sales across 2 batches post-harvest can mitigate price dip risks.</li>
+                  <li>Dry storage for 30 days may offer an estimated +5% price premium.</li>
+                </ul>
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+            <div className="flex justify-end pt-2">
               <button
-                onClick={() => setIsAiAdvisorOpen(false)}
-                className="px-4 py-2 bg-emerald-600 text-white font-extrabold text-xs rounded-xl shadow-sm hover:bg-emerald-700"
+                type="button"
+                onClick={() => setIsStrategyDrawerOpen(false)}
+                className="px-4 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold"
               >
-                Close Guidance
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };
